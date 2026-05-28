@@ -2,8 +2,14 @@ VoiceUpgh
 ******************************************************************
 ******************************************************************
 Cluster0 username = rde70808_db_user
+
+
 Cluster0 db password = qyyGHUJ2gR2D4Y86
+
+
 connection string = mongodb+srv://rde70808_db_user:qyyGHUJ2gR2D4Y86@cluster0.v9tupee.mongodb.net/?appName=Cluster0
+
+
 connetion string code sample 
 "
 
