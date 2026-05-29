@@ -2,7 +2,7 @@
 
 > A public, AI-powered accountability layer between citizens and their MPs.
 
-Citizens report and upvote local problems by constituency. Claude clusters the noise into a ranked brief. Every MP gets a public scorecard — and silence becomes a data point.
+Citizens report and upvote local problems by constituency. Claude clusters the noise into a ranked brief. Every MP gets a public scorecard and silence becomes a data point.
 
 ---
 
