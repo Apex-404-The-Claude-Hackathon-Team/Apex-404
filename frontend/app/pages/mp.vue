@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { FileText, Users, AlertTriangle, LayoutDashboard, BrainCircuit, Activity, BookOpen, Search, Filter, MessageSquare, CheckCircle, HardHat, Cpu } from '@lucide/vue'
 
-definePageMeta({ middleware: 'mp' })
+definePageMeta({ middleware: 'mp', layout: false })
 
 const auth = useAuthStore()
 const { $api } = useNuxtApp() as any
@@ -74,7 +74,31 @@ const stats = computed(() => {
   ]
 })
 
-const recentBriefs = ref<any[]>([])
+const { data: briefingData, pending: loadingBriefing } = await useAsyncData<any>('mp-briefing', () => {
+  return $api(`/api/ai/briefing/${constituencyId.value}`)
+}, {
+  watch: [constituencyId]
+})
+
+const briefing = computed(() => briefingData.value?.briefing || null)
+
+const recentBriefs = computed(() => {
+  if (!briefing.value) return []
+  const unresolvedCount = reports.value.filter((r: any) => r.status !== 'resolved').length
+  let severity = 'MODERATE'
+  if (unresolvedCount > 15) severity = 'CRITICAL'
+  else if (unresolvedCount > 5) severity = 'HIGH'
+  
+  return [
+    {
+      id: 'current',
+      title: briefing.value.executiveSummary ? (briefing.value.executiveSummary.slice(0, 80) + '...') : 'Constituency Status Briefing',
+      severity: severity,
+      date: new Date(briefingData.value?.generatedAt || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+      sources: String(reports.value.length)
+    }
+  ]
+})
 
 const submitMPResponse = async () => {
   if (!targetReportId.value || !mpResponseText.value) return
@@ -429,128 +453,99 @@ const formatDate = (dateString: string) => {
 
               <!-- ================= SECTION: AI BRIEFS ================= -->
               <div v-if="selectedMenu === 'ai-briefs'" class="space-y-6 text-left">
-                  <div class="border-b border-slate-200 pb-3">
-                      <h2 class="text-lg font-display font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                          <BrainCircuit class="w-5 h-5 text-civic-blue animate-pulse" /> AI Constituency Insights & Synthesis
-                      </h2>
-                      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">AI-extracted community priorities, duplicate detection, and geographic breakdowns.</p>
-                  </div>
-
-                  <!-- Brief Tabs -->
-                  <div class="flex border-b border-slate-200 bg-white rounded-t">
-                      <button 
-                        @click="activeBriefTab = 'clusters'" 
-                        :class="activeBriefTab === 'clusters' ? 'border-b-2 border-civic-blue text-slate-800' : 'text-slate-500 hover:bg-slate-50'" 
-                        class="flex-1 py-4 font-black uppercase tracking-widest text-[10px] focus:outline-none transition-all cursor-pointer border-none bg-transparent"
-                      >
-                          Issue Clustering
-                      </button>
-                      <button 
-                        @click="activeBriefTab = 'hotspots'" 
-                        :class="activeBriefTab === 'hotspots' ? 'border-b-2 border-civic-blue text-slate-800' : 'text-slate-500 hover:bg-slate-50'" 
-                        class="flex-1 py-4 font-black uppercase tracking-widest text-[10px] focus:outline-none transition-all cursor-pointer border-none bg-transparent"
-                      >
-                          Geographic Hotspots
-                      </button>
-                      <button 
-                        @click="activeBriefTab = 'sentiment'" 
-                        :class="activeBriefTab === 'sentiment' ? 'border-b-2 border-civic-blue text-slate-800' : 'text-slate-500 hover:bg-slate-50'" 
-                        class="flex-1 py-4 font-black uppercase tracking-widest text-[10px] focus:outline-none transition-all cursor-pointer border-none bg-transparent"
-                      >
-                          Citizen Sentiment
-                      </button>
-                  </div>
-
-                  <!-- Tab 1: Issue Clustering -->
-                  <div v-if="activeBriefTab === 'clusters'" class="bg-white border border-slate-200 rounded-b p-8 shadow-civic space-y-6">
-                      <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Duplicate Suppression Telemetry</h3>
-                      <p class="text-xs text-slate-500 leading-relaxed font-semibold">
-                          Our algorithms aggregate identical complaints within a 150-meter radius to suppress spam and redundant records.
-                      </p>
-
-                      <div class="space-y-4">
-                          <div class="border border-slate-200 rounded p-5 bg-slate-50 flex items-center justify-between">
-                              <div>
-                                  <h4 class="font-bold text-slate-800 text-xs">Liberation Road Drainage Failure Cluster</h4>
-                                  <span class="text-[9px] font-black uppercase tracking-widest text-rose-600 block mt-1.5">42 duplicated citizen files merged</span>
-                              </div>
-                              <span class="bg-rose-50 text-rose-600 px-3 py-1 rounded text-[8px] font-black uppercase tracking-widest border border-rose-200">Critical Priority</span>
-                          </div>
-                          
-                          <div class="border border-slate-200 rounded p-5 bg-slate-50 flex items-center justify-between">
-                              <div>
-                                  <h4 class="font-bold text-slate-800 text-xs">Nhyiaeso Electricity Fluctuation Cluster</h4>
-                                  <span class="text-[9px] font-black uppercase tracking-widest text-amber-600 block mt-1.5">18 clinic/residential files merged</span>
-                              </div>
-                              <span class="bg-amber-50 text-amber-600 px-3 py-1 rounded text-[8px] font-black uppercase tracking-widest border border-amber-200">High Priority</span>
-                          </div>
+                  <div class="border-b border-slate-200 pb-3 flex justify-between items-center">
+                      <div>
+                          <h2 class="text-lg font-display font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                              <BrainCircuit class="w-5 h-5 text-civic-blue animate-pulse" /> AI Constituency Insights & Synthesis
+                          </h2>
+                          <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">AI-generated priorities, sentiment metrics, and action plans.</p>
+                      </div>
+                      <div v-if="loadingBriefing" class="flex items-center gap-2 text-slate-400 text-xs font-bold">
+                          <span class="animate-spin h-3.5 w-3.5 border-2 border-slate-400 border-t-transparent rounded-full"></span>
+                          <span>Regenerating Brief...</span>
                       </div>
                   </div>
 
-                  <!-- Tab 2: Geographic Hotspots -->
-                  <div v-if="activeBriefTab === 'hotspots'" class="bg-white border border-slate-200 rounded-b p-8 shadow-civic space-y-6">
-                      <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Electoral Ward Heat breakdown</h3>
-                      <p class="text-xs text-slate-500 leading-relaxed font-semibold">
-                          Analysis of active, ignored, and resolved report counts relative to individual polling districts.
-                      </p>
-
-                      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <div class="border border-slate-200 p-6 rounded bg-slate-50 text-center shadow-sm relative overflow-hidden">
-                              <div class="absolute top-0 left-0 right-0 h-[2px] bg-rose-500"></div>
-                              <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Atonsu Ward</span>
-                              <h4 class="text-3xl font-display font-black text-slate-800 mt-2">62%</h4>
-                              <p class="text-[8px] font-black text-rose-600 uppercase tracking-widest mt-1">Active Backlog</p>
-                          </div>
-                          <div class="border border-slate-200 p-6 rounded bg-slate-50 text-center shadow-sm relative overflow-hidden">
-                              <div class="absolute top-0 left-0 right-0 h-[2px] bg-civic-blue"></div>
-                              <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Nhyiaeso Ward</span>
-                              <h4 class="text-3xl font-display font-black text-slate-800 mt-2">24%</h4>
-                              <p class="text-[8px] font-black text-civic-blue uppercase tracking-widest mt-1">Utilities deficit</p>
-                          </div>
-                          <div class="border border-slate-200 p-6 rounded bg-slate-50 text-center shadow-sm relative overflow-hidden">
-                              <div class="absolute top-0 left-0 right-0 h-[2px] bg-slate-400"></div>
-                              <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Santasi Ward</span>
-                              <h4 class="text-3xl font-display font-black text-slate-800 mt-2">14%</h4>
-                              <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Sanitation issues</p>
-                          </div>
-                      </div>
+                  <div v-if="!briefing" class="bg-white border border-slate-200 rounded p-12 text-center text-slate-450 font-bold uppercase tracking-widest text-xs">
+                      No AI insights available for this constituency.
                   </div>
 
-                  <!-- Tab 3: Sentiment Analysis -->
-                  <div v-if="activeBriefTab === 'sentiment'" class="bg-white border border-slate-200 rounded-b p-8 shadow-civic space-y-6">
-                      <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Constituent Sentiment Metric</h3>
-                      <p class="text-xs text-slate-500 leading-relaxed font-semibold">
-                          Semantic synthesis analyzing citizen descriptions and comment threads to evaluate local constituent mood levels.
-                      </p>
+                  <div v-else class="space-y-6">
+                      <!-- Executive Summary Card -->
+                      <div class="bg-gradient-to-br from-slate-900 to-slate-955 text-white rounded-xl p-8 border border-white/5 relative overflow-hidden shadow-lg">
+                          <div class="absolute right-[-10%] bottom-[-20%] w-72 h-72 bg-civic-blue/15 rounded-full filter blur-3xl pointer-events-none"></div>
+                          <span class="text-[8px] bg-civic-blue/20 text-civic-blue border border-civic-blue/35 font-black px-2.5 py-1 rounded uppercase tracking-widest">Executive Summary</span>
+                          <p class="text-sm font-semibold text-slate-300 leading-relaxed mt-4 max-w-3xl">
+                              {{ briefing.executiveSummary }}
+                          </p>
+                      </div>
 
-                      <div class="space-y-4">
-                          <div>
-                              <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-                                  <span>Frustrated (Poor Infrastructure)</span>
-                                  <span>78%</span>
+                      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          <!-- Left/Middle: Priorities & Actions -->
+                          <div class="lg:col-span-2 space-y-6">
+                              <!-- Top Priorities -->
+                              <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-civic space-y-4">
+                                  <h3 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">Critical Citizen Issues</h3>
+                                  <div class="divide-y divide-slate-100 space-y-4">
+                                      <div v-for="(item, index) in briefing.topPriorities" :key="index" class="pt-4 first:pt-0 space-y-2">
+                                          <div class="flex items-center gap-2">
+                                              <span class="text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest" :class="{
+                                                  'bg-rose-50 border border-rose-205 text-rose-600': item.urgency === 'high',
+                                                  'bg-amber-55 border border-amber-205 text-amber-600': item.urgency === 'medium',
+                                                  'bg-blue-50 border border-blue-205 text-blue-600': item.urgency === 'low'
+                                              }">{{ item.urgency }} Urgency</span>
+                                              <h4 class="font-bold text-xs text-slate-800 uppercase tracking-tight">{{ item.issue }}</h4>
+                                          </div>
+                                          <p class="text-[11px] text-slate-500 font-semibold leading-relaxed pl-1 border-l-2 border-slate-200">
+                                              <span class="font-black text-slate-700">Recommended Action:</span> {{ item.recommendedAction }}
+                                          </p>
+                                      </div>
+                                  </div>
                               </div>
-                              <div class="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                  <div class="h-full bg-rose-500" style="width: 78%"></div>
+
+                              <!-- Action Plan Checklist -->
+                              <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-civic space-y-4">
+                                  <h3 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">Recommended Office Action Plan</h3>
+                                  <ul class="space-y-3">
+                                      <li v-for="(action, index) in briefing.recommendedActions" :key="index" class="flex items-start gap-2 text-xs font-semibold text-slate-650">
+                                          <span class="w-5 h-5 rounded-full bg-slate-105 border border-slate-200 flex items-center justify-center font-black text-[10px] text-slate-500 shrink-0 mt-0.5">{{ Number(index) + 1 }}</span>
+                                          <span class="leading-relaxed">{{ action }}</span>
+                                      </li>
+                                  </ul>
                               </div>
                           </div>
 
-                          <div>
-                              <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-                                  <span>Neutral (Ongoing Commitments)</span>
-                                  <span>14%</span>
+                          <!-- Right: Sentiment & Project Alerts -->
+                          <div class="space-y-6">
+                              <!-- Sentiment Card -->
+                              <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-civic space-y-4">
+                                  <h3 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">Constituent Sentiment</h3>
+                                  <div class="text-center p-4 bg-slate-50 rounded-xl border border-slate-100/50">
+                                      <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Mood Indicator</span>
+                                      <h4 class="text-2xl font-display font-black uppercase tracking-tight mt-1" :class="{
+                                          'text-emerald-500': briefing.citizenSentiment === 'positive',
+                                          'text-rose-500': briefing.citizenSentiment === 'negative',
+                                          'text-amber-55': briefing.citizenSentiment === 'mixed',
+                                          'text-slate-500': briefing.citizenSentiment === 'neutral'
+                                      }">{{ briefing.citizenSentiment }}</h4>
+                                  </div>
+                                  <p class="text-[11px] text-slate-550 font-semibold leading-relaxed">
+                                      {{ briefing.sentimentReason }}
+                                  </p>
                               </div>
-                              <div class="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                  <div class="h-full bg-amber-500" style="width: 14%"></div>
-                              </div>
-                          </div>
 
-                          <div>
-                              <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
-                                  <span>Optimistic (Resolved Education/Water)</span>
-                                  <span>8%</span>
-                              </div>
-                              <div class="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                  <div class="h-full bg-emerald-500" style="width: 8%"></div>
+                              <!-- Project Alerts -->
+                              <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-civic space-y-4">
+                                  <h3 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2">Stalled Projects Alerts</h3>
+                                  <div class="space-y-3">
+                                      <div v-if="!briefing.projectAlerts || briefing.projectAlerts.length === 0" class="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-4">
+                                          No alerts reported this period.
+                                      </div>
+                                      <div v-else v-for="(alert, index) in briefing.projectAlerts" :key="index" class="p-3 bg-rose-50 border border-rose-150 text-rose-700 rounded text-[11px] font-semibold flex gap-2">
+                                          <AlertTriangle class="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                                          <span>{{ alert }}</span>
+                                      </div>
+                                  </div>
                               </div>
                           </div>
                       </div>

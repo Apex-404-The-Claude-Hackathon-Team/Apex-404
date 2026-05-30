@@ -12,6 +12,7 @@ const dashboardRoutes    = require('./routes/dashboard');
 const mpRoutes           = require('./routes/mp');
 const aiRoutes           = require('./routes/ai');
 const verificationRoutes = require('./routes/verification');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/dashboard',    dashboardRoutes);
 app.use('/api/mp',           mpRoutes);
 app.use('/api/ai',           aiRoutes);
 app.use('/api/verification', verificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

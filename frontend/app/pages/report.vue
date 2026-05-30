@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { FileText, Edit3, Mic, MapPin, UploadCloud, AlertTriangle, ShieldCheck, HelpCircle, ArrowLeft, Cpu } from '@lucide/vue'
 
 const auth = useAuthStore()
-const { $api } = useNuxtApp()
+const { $api } = useNuxtApp() as any
 
 const mode = ref<'text' | 'voice'>('voice')
 const errors = ref<string[]>([])
@@ -21,6 +21,86 @@ const form = ref({
 
 const submitting = ref(false)
 const success = ref(false)
+
+// Fetch live constituencies on setup
+const { data: constituenciesData } = await useAsyncData<any>('ghana-constituencies', () => {
+    return $api('/api/location/constituencies')
+})
+
+const fallbackMps = [
+    { id: 'mp_1', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
+    { id: 'mp_2', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
+    { id: 'mp_3', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+]
+
+const constituenciesList = computed(() => {
+    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+        ? constituenciesData.value.constituencies
+        : fallbackMps
+})
+
+const getConstituencyLabel = (item: any) => {
+    const mpName = item.mpName ? `Hon. ${item.mpName}` : 'Elected MP'
+    return `${item.name} (${mpName})`
+}
+
+const searchQuery = ref('')
+const showDropdown = ref(false)
+const dropdownRef = ref<HTMLElement | null>(null)
+
+const filteredConstituencies = computed(() => {
+    const query = searchQuery.value.toLowerCase().trim()
+    if (!query) {
+        return constituenciesList.value
+    }
+    return constituenciesList.value.filter((item: any) => {
+        const nameMatch = item.name.toLowerCase().includes(query)
+        const mpMatch = item.mpName ? item.mpName.toLowerCase().includes(query) : false
+        const regionMatch = item.region ? item.region.toLowerCase().includes(query) : false
+        return nameMatch || mpMatch || regionMatch
+    })
+})
+
+const selectConstituency = (item: any) => {
+    form.value.constituency = item.id
+    searchQuery.value = getConstituencyLabel(item)
+    showDropdown.value = false
+}
+
+// Watchers
+watch(() => form.value.constituency, (newVal) => {
+    const matched = constituenciesList.value.find((item: any) => item.id === newVal)
+    if (matched) {
+        searchQuery.value = getConstituencyLabel(matched)
+    } else {
+        // Handle names set by simulation (e.g. "Suame")
+        const idMatched = constituenciesList.value.find((item: any) => item.name.toLowerCase() === newVal.toLowerCase())
+        if (idMatched) {
+            form.value.constituency = idMatched.id
+        }
+    }
+})
+
+watch(searchQuery, (newVal) => {
+    if (!newVal.trim()) {
+        form.value.constituency = ''
+    }
+})
+
+// Click Away Handler
+const handleDocumentClick = (e: MouseEvent) => {
+    if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+        showDropdown.value = false
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleDocumentClick)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleDocumentClick)
+})
 
 // Voice Simulation States
 const isRecording = ref(false)
@@ -102,7 +182,7 @@ const handleSubmit = async () => {
       })
     }
 
-    await $api<any>('/api/posts', {
+    await $api('/api/posts', {
       method: 'POST',
       body: payload
     })
@@ -226,10 +306,49 @@ const handleSubmit = async () => {
                                   </div>
                               </div>
 
-                              <div>
+                              <div class="relative" ref="dropdownRef">
                                   <label class="block text-[10px] font-black text-civic-navy uppercase tracking-widest mb-2">District / Constituency <span class="text-rose-500">*</span></label>
                                   <div class="glow-blue-border border border-slate-300 transition-all rounded">
-                                      <input v-model="form.constituency" type="text" required class="w-full bg-white px-4 py-3.5 font-bold text-xs text-civic-navy outline-none" placeholder="e.g. Nhyiaeso"/>
+                                      <input 
+                                        v-model="searchQuery" 
+                                        @focus="showDropdown = true" 
+                                        type="text" 
+                                        required 
+                                        class="w-full bg-white px-4 py-3.5 font-bold text-xs text-civic-navy outline-none" 
+                                        placeholder="Search constituency, MP, or region..."
+                                      />
+                                      <!-- Hidden field to pass to backend -->
+                                      <input type="hidden" v-model="form.constituency" />
+                                  </div>
+                                  
+                                  <!-- Dropdown list -->
+                                  <div 
+                                    v-if="showDropdown" 
+                                    class="absolute z-20 left-0 right-0 mt-1 max-h-48 bg-white border border-slate-200 rounded shadow-lg overflow-y-auto"
+                                  >
+                                      <div 
+                                        v-if="filteredConstituencies.length === 0" 
+                                        class="px-4 py-3 text-xs text-slate-400 font-semibold"
+                                      >
+                                          No constituencies found matching "{{ searchQuery }}"
+                                      </div>
+                                      <button 
+                                        v-else
+                                        v-for="item in filteredConstituencies" 
+                                        :key="item.id" 
+                                        type="button"
+                                        @click="selectConstituency(item)"
+                                        class="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-none text-xs font-semibold flex flex-col cursor-pointer"
+                                        :class="form.constituency === item.id ? 'bg-slate-100 text-slate-900' : 'text-slate-700'"
+                                      >
+                                          <span class="font-bold">{{ item.name }}</span>
+                                          <span class="text-[10px] text-slate-400" v-if="item.mpName">
+                                              MP: Hon. {{ item.mpName }} <span v-if="item.region">| {{ item.region }}</span>
+                                          </span>
+                                          <span class="text-[10px] text-slate-400" v-else-if="item.region">
+                                              {{ item.region }}
+                                          </span>
+                                      </button>
                                   </div>
                               </div>
 

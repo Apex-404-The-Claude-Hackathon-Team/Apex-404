@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { register, login, refresh, logout, getMe, googleAuth } = require('../controllers/authController');
+const { register, login, mpLogin, mpRegister, refresh, logout, getMe, googleAuth } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const registerRules = [
@@ -19,8 +19,16 @@ const loginRules = [
   body('password').notEmpty(),
 ];
 
+const mpRegisterRules = [
+  ...registerRules,
+  body('constituency').trim().notEmpty().withMessage('Constituency selection is required.'),
+  body('secretKey').trim().notEmpty().withMessage('MP Verification Access Key is required.')
+];
+
 router.post('/register',     registerRules, register);
+router.post('/mp-register',  mpRegisterRules, mpRegister);
 router.post('/login',        loginRules,    login);
+router.post('/mp-login',     loginRules,    mpLogin);
 router.post('/google',                      googleAuth);
 router.post('/refresh',                     refresh);
 router.post('/logout',       protect,       logout);

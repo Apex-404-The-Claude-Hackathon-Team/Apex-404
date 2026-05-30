@@ -1,234 +1,222 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Award, Briefcase, CheckCircle, Clock, TrendingUp, LineChart, ShieldCheck } from '@lucide/vue'
+import { computed } from 'vue'
+import { useAuthStore } from '~/stores/auth'
+import { LineChart, CheckCircle, AlertTriangle, MessageSquare, Award, Users } from '@lucide/vue'
 
 const { $api } = useNuxtApp() as any
+const auth = useAuthStore()
 
-// Fetch telemetry stats for all constituencies in parallel
-const { data: remoteData } = await useAsyncData('scorecards-telemetry', async () => {
-  const [db1, db2, db3] = await Promise.all([
-    $api(`/api/dashboard/mp_1`).catch(() => null),
-    $api(`/api/dashboard/mp_2`).catch(() => null),
-    $api(`/api/dashboard/mp_3`).catch(() => null),
+const constituency = computed(() => auth.user?.constituency ?? null)
+
+const { data: dashboardData, pending } = await useAsyncData('scorecard-dashboard', async () => {
+  if (!constituency.value) return null
+  const [dashboard, mpRes] = await Promise.all([
+    $api(`/api/dashboard/${constituency.value}`).catch(() => null),
+    $api(`/api/mp/${constituency.value}`).catch(() => null),
   ])
-  return { mp_1: db1?.reportStats, mp_2: db2?.reportStats, mp_3: db3?.reportStats }
+  return { dashboard, mpProfile: mpRes?.profile ?? null }
 })
 
-const searchQuery = ref('')
+const mp         = computed(() => dashboardData.value?.dashboard?.mp ?? null)
+const mpProfile  = computed(() => dashboardData.value?.mpProfile ?? null)
+const stats      = computed(() => dashboardData.value?.dashboard?.reportStats ?? null)
 
-const scorecards = computed(() => {
-  const defaults = [
-    {
-      id: 'mp_1',
-      name: 'Hon. Osei Kyei-Mensah',
-      constituency: 'Suame District Assembly',
-      party: 'NPP',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-      defaultScore: 84.5,
-      defaultResolved: 342,
-      defaultResponseTime: '4.2 Days',
-      topIssues: ['Road Infrastructure', 'Market Development'],
-      recentAction: 'Allocated 2.4B GHS for Central Drainage Overhaul (Verified)'
-    },
-    {
-      id: 'mp_2',
-      name: 'Hon. Samuel Okudzeto Ablakwa',
-      constituency: 'North Tongu Assembly',
-      party: 'NDC',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
-      defaultScore: 72.0,
-      defaultResolved: 198,
-      defaultResponseTime: '8.5 Days',
-      topIssues: ['Sanitation', 'Education'],
-      recentAction: 'Acknowledged Water Shortage Reports (Pending Action)'
-    },
-    {
-      id: 'mp_3',
-      name: 'Hon. Haruna Iddrisu',
-      constituency: 'Tamale South',
-      party: 'NDC',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
-      defaultScore: 89.2,
-      defaultResolved: 412,
-      defaultResponseTime: '2.8 Days',
-      topIssues: ['Health Facilities', 'Youth Employment'],
-      recentAction: 'Commissioned 4 new localized boreholes'
-    }
-  ]
-
-  const mapped = defaults.map(mp => {
-    const stats = remoteData.value?.[mp.id as 'mp_1' | 'mp_2' | 'mp_3']
-    const score = stats ? (stats.responseRate || mp.defaultScore) : mp.defaultScore
-    const resolved = stats ? (stats.byStatus?.resolved || mp.defaultResolved) : mp.defaultResolved
-    
-    return {
-      id: mp.id,
-      name: mp.name,
-      constituency: mp.constituency,
-      party: mp.party,
-      score,
-      avatarUrl: mp.avatarUrl,
-      metrics: {
-        reportsResolved: resolved,
-        averageResponseTime: mp.defaultResponseTime,
-        townHallsHeld: mp.id === 'mp_1' ? 12 : mp.id === 'mp_2' ? 5 : 18,
-        budgetTransparency: mp.id === 'mp_3' ? 'Very High' : mp.id === 'mp_1' ? 'High' : 'Medium'
-      },
-      topIssues: mp.topIssues,
-      recentAction: mp.recentAction
-    }
-  })
-
-  const filtered = mapped.filter(mp => {
-    if (!searchQuery.value) return true
-    const q = searchQuery.value.toLowerCase()
-    return mp.name.toLowerCase().includes(q) || mp.constituency.toLowerCase().includes(q)
-  })
-
-  // Sort by score in descending order
-  return filtered.sort((a, b) => b.score - a.score)
+const responseRate   = computed(() => stats.value?.responseRate   ?? 0)
+const resolutionRate = computed(() => stats.value?.resolutionRate ?? 0)
+const ignoredRate    = computed(() => {
+  const total   = stats.value?.total        ?? 0
+  const ignored = stats.value?.ignoredCount ?? 0
+  return total > 0 ? Math.round((ignored / total) * 100) : 0
 })
 
-const performanceLevels = (score: number) => {
-    if (score >= 85) return { bg: 'bg-emerald-500', text: 'text-emerald-500', label: 'Excellent' }
-    if (score >= 70) return { bg: 'bg-civic-gold', text: 'text-civic-gold', label: 'Satisfactory' }
-    return { bg: 'bg-rose-500', text: 'text-rose-500', label: 'Needs Improvement' }
-}
+const overallScore = computed(() =>
+  Math.round(resolutionRate.value * 0.5 + responseRate.value * 0.3 + (100 - ignoredRate.value) * 0.2)
+)
+
+const perf = computed(() => {
+  const s = overallScore.value
+  if (s >= 80) return { label: 'Excellent',          textClass: 'text-emerald-500', bgClass: 'bg-emerald-500' }
+  if (s >= 60) return { label: 'Satisfactory',        textClass: 'text-amber-500',   bgClass: 'bg-amber-500'   }
+  return              { label: 'Needs Improvement',   textClass: 'text-rose-500',    bgClass: 'bg-rose-500'    }
+})
+
+const mpName   = computed(() => mp.value ? `${mp.value.firstName} ${mp.value.lastName}` : '—')
+const party    = computed(() => mpProfile.value?.party ?? '—')
+const avatarUrl = computed(() =>
+  mpProfile.value?.profilePhoto?.url ??
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80'
+)
+
+// SVG circle chart helpers
+const R           = 45
+const CIRCUMFERENCE = 2 * Math.PI * R
+const dashOffset  = (pct: number) => CIRCUMFERENCE * (1 - Math.min(pct, 100) / 100)
 </script>
 
 <template>
   <div class="w-full bg-[#f8fafc] min-h-screen pb-24">
-      
-      <!-- Premium Dark Header with Unsplash background photo -->
-      <div class="relative pt-16 pb-28 px-6 border-b border-white/5 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1600&q=80')">
-          <!-- Dark overlay for text readability -->
-          <div class="absolute inset-0 bg-slate-950/75 z-0"></div>
-          <div class="absolute top-[10%] left-[10%] w-80 h-80 bg-civic-blue/5 rounded-full filter blur-3xl pointer-events-none"></div>
-          
-          <div class="container mx-auto px-6 lg:px-12 flex flex-col md:flex-row justify-between items-end gap-6 relative z-10">
-              <div>
-                  <div class="flex items-center gap-3 mb-6">
-                      <div class="w-12 h-12 bg-white/5 border border-white/10 rounded flex items-center justify-center">
-                          <LineChart class="w-6 h-6 text-civic-blue animate-pulse" />
-                      </div>
-                      <h1 class="text-4xl md:text-5xl font-display font-black text-white uppercase tracking-tight">
-                          Check MP Ratings
-                      </h1>
-                  </div>
-                  <p class="text-slate-400 font-semibold text-base max-w-2xl border-l-4 border-civic-gold pl-4 leading-relaxed">
-                      See how fast your Member of Parliament responds to community reports and fixes problems in your neighborhood.
-                  </p>
-              </div>
-              
-              <div class="bg-[#0f1524] border border-white/5 p-5 rounded min-w-[250px] shadow-xl text-left">
-                  <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-2">Active Rating Period</span>
-                  <p class="text-xl font-black text-white tracking-widest">Q4 2026</p>
-                  <span class="text-[10px] text-civic-blue font-bold mt-1.5 block">Next update in 14 days</span>
-              </div>
+
+    <!-- Header -->
+    <div class="relative pt-16 pb-28 px-6 border-b border-white/5 bg-cover bg-center"
+         style="background-image: url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1600&q=80')">
+      <div class="absolute inset-0 bg-slate-950/75 z-0"></div>
+      <div class="container mx-auto px-6 lg:px-12 flex flex-col md:flex-row justify-between items-end gap-6 relative z-10">
+        <div>
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-12 h-12 bg-white/5 border border-white/10 rounded flex items-center justify-center">
+              <LineChart class="w-6 h-6 text-civic-blue animate-pulse" />
+            </div>
+            <h1 class="text-4xl md:text-5xl font-display font-black text-white uppercase tracking-tight">
+              MP Scorecard
+            </h1>
           </div>
+          <p class="text-slate-400 font-semibold text-base max-w-2xl border-l-4 border-civic-gold pl-4 leading-relaxed">
+            Live accountability data for your constituency's Member of Parliament.
+          </p>
+        </div>
+        <div class="bg-[#0f1524] border border-white/5 p-5 rounded min-w-[200px] shadow-xl text-left">
+          <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-2">Active Rating Period</span>
+          <p class="text-xl font-black text-white tracking-widest">Q4 2026</p>
+          <span class="text-[10px] text-civic-blue font-bold mt-1.5 block">Next update in 14 days</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="container mx-auto px-6 lg:px-12 -mt-16 relative z-20 space-y-6">
+
+      <!-- No constituency state -->
+      <div v-if="!constituency" class="bg-white rounded-xl shadow-civic border border-slate-200 p-16 text-center">
+        <Users class="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h2 class="text-lg font-display font-black text-slate-700 uppercase tracking-wide mb-2">No Constituency Linked</h2>
+        <p class="text-xs font-semibold text-slate-400 max-w-sm mx-auto">
+          Log in or complete your profile to see your MP's scorecard.
+        </p>
+        <NuxtLink to="/login" class="inline-block mt-6 bg-[#0f1524] text-white text-xs font-black uppercase tracking-widest px-6 py-3 rounded transition-colors hover:bg-black">
+          Log In
+        </NuxtLink>
       </div>
 
-      <!-- Main Scoreboard -->
-      <div class="container mx-auto px-6 lg:px-12 -mt-16 relative z-20">
-          
-          <UiCard class="bg-white rounded-lg shadow-civic border border-slate-200 overflow-hidden p-0 relative">
-              <div class="p-8 border-b border-slate-200/80 bg-slate-50 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <h2 class="text-xs font-display font-black text-civic-navy uppercase tracking-wider flex items-center gap-2">
-                       <Award class="w-5 h-5 text-civic-gold" /> Leaderboard Rankings
-                  </h2>
-                  <div class="flex gap-3 w-full max-w-sm">
-                      <div class="glow-blue-border border border-slate-300 bg-white rounded flex-1">
-                          <input v-model="searchQuery" placeholder="Search Representative..." class="w-full bg-white px-4 py-2 text-xs font-bold text-civic-navy outline-none" />
-                      </div>
-                      <button class="bg-[#0f1524] hover:bg-black text-white font-black uppercase tracking-widest text-[9px] px-5 py-2.5 rounded transition-colors cursor-pointer">Filter</button>
-                  </div>
-              </div>
-
-              <!-- Scorecard List -->
-              <div class="divide-y divide-slate-100">
-                  <div v-if="scorecards.length === 0" class="p-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
-                      No representatives found matching your search.
-                  </div>
-                  <div v-for="(mp, index) in scorecards" :key="mp.id" class="p-8 flex flex-col xl:flex-row gap-8 hover:bg-[#fcfdfe] transition-all duration-350">
-                      
-                      <!-- Identifier Block -->
-                       <div class="xl:w-1/4 flex flex-col border-b xl:border-b-0 xl:border-r border-slate-200/60 pb-6 xl:pb-0 pr-0 xl:pr-8">
-                            <div class="flex items-center gap-4 mb-4">
-                                <div class="relative shrink-0">
-                                    <img :src="mp.avatarUrl" :alt="mp.name" class="w-12 h-12 rounded-full border border-slate-200 object-cover shadow-sm" />
-                                    <span class="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-slate-900 border border-white text-white flex items-center justify-center font-black text-[9px] shadow-sm">
-                                        {{ index + 1 }}
-                                    </span>
-                                </div>
-                                <div>
-                                    <NuxtLink :to="`/constituency/${mp.id}`" class="text-lg font-display font-black text-civic-navy hover:text-civic-blue transition-colors uppercase leading-tight">
-                                        {{ mp.name }}
-                                    </NuxtLink>
-                                    <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1">{{ mp.constituency }}</span>
-                                </div>
-                            </div>
-                          
-                           <div class="mt-auto bg-slate-50 border border-slate-100 p-4 rounded text-left">
-                               <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Overall Rating</span>
-                               <div class="flex items-end gap-1 leading-none">
-                                   <span class="text-3xl font-display font-black tracking-tighter" :class="performanceLevels(mp.score).text">{{ mp.score }}%</span>
-                                   <span class="text-[10px] font-bold text-slate-400 mb-1">/ 100</span>
-                               </div>
-                               <div class="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden border border-slate-350">
-                                   <div class="h-full rounded-full" :class="performanceLevels(mp.score).bg" :style="`width: ${mp.score}%`"></div>
-                               </div>
-                           </div>
-
-                           <NuxtLink :to="`/constituency/${mp.id}`" class="mt-4 text-[9px] font-black text-civic-blue hover:text-civic-navy uppercase tracking-widest flex items-center gap-1 transition-colors">
-                               Go to Dashboard &rarr;
-                           </NuxtLink>
-                       </div>
-
-                      <!-- Metrics Grid -->
-                      <div class="xl:w-2/4 grid grid-cols-2 md:grid-cols-4 gap-4 pb-6 xl:pb-0 xl:border-r border-slate-200/60 pr-0 xl:pr-8 text-left">
-                          <div class="p-4 border border-slate-100 rounded bg-slate-50/50">
-                              <CheckCircle class="w-5 h-5 text-emerald-500 mb-3" />
-                              <span class="block text-2xl font-black text-civic-navy leading-none">{{ mp.metrics.reportsResolved }}</span>
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1.5">Issues Resolved</span>
-                          </div>
-                          <div class="p-4 border border-slate-100 rounded bg-slate-50/50">
-                              <Clock class="w-5 h-5 text-amber-500 mb-3" />
-                              <span class="block text-lg font-black text-civic-navy leading-none mt-1">{{ mp.metrics.averageResponseTime }}</span>
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1.5">Avg Response</span>
-                          </div>
-                          <div class="p-4 border border-slate-100 rounded bg-slate-50/50">
-                              <Briefcase class="w-5 h-5 text-civic-blue mb-3" />
-                              <span class="block text-2xl font-black text-civic-navy leading-none">{{ mp.metrics.townHallsHeld }}</span>
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1.5">Town Halls</span>
-                          </div>
-                          <div class="p-4 border border-slate-100 rounded bg-slate-50/50">
-                              <ShieldCheck class="w-5 h-5 text-indigo-500 mb-3" />
-                              <span class="block text-xs font-black text-civic-navy leading-none mt-2">{{ mp.metrics.budgetTransparency }}</span>
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-500 mt-1.5">Transparency</span>
-                          </div>
-                      </div>
-
-                      <!-- Context Block -->
-                      <div class="xl:w-1/4 flex flex-col justify-center text-left">
-                          <div class="mb-4">
-                              <span class="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">Priority Focus Wards</span>
-                              <div class="flex flex-wrap gap-1.5">
-                                  <span v-for="tag in mp.topIssues" :key="tag" class="text-[8px] font-black text-civic-navy bg-[#0f1524]/5 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider">
-                                      {{ tag }}
-                                  </span>
-                              </div>
-                          </div>
-                          
-                          <div class="bg-blue-50/50 border border-blue-100 p-4 rounded relative">
-                              <TrendingUp class="w-3.5 h-3.5 text-civic-blue absolute top-4 right-4 animate-pulse" />
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-civic-blue mb-2">Latest Action</span>
-                              <p class="text-xs font-semibold text-slate-700 leading-normal">{{ mp.recentAction }}</p>
-                          </div>
-                      </div>
-                      
-                  </div>
-              </div>
-          </UiCard>
+      <!-- Loading -->
+      <div v-else-if="pending" class="bg-white rounded-xl shadow-civic border border-slate-200 p-16 text-center">
+        <UiLoadingSpinner size="lg" />
       </div>
+
+      <template v-else>
+        <!-- MP Profile Card -->
+        <div class="bg-white rounded-xl shadow-civic border border-slate-200 overflow-hidden">
+          <div class="p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <img :src="avatarUrl" :alt="mpName"
+                 class="w-20 h-20 rounded-full border-2 border-slate-200 object-cover shadow-md shrink-0" />
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-3 mb-1">
+                <h2 class="text-2xl font-display font-black text-slate-900 uppercase leading-none">
+                  {{ mp ? `Hon. ${mpName}` : 'MP Not Registered' }}
+                </h2>
+                <span v-if="party !== '—'"
+                      class="text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest border"
+                      :class="party === 'NPP' ? 'bg-blue-50 text-blue-700 border-blue-200' : party === 'NDC' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-600 border-slate-200'">
+                  {{ party }}
+                </span>
+              </div>
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">{{ constituency }} Constituency</p>
+              <p v-if="mpProfile?.bio" class="text-xs text-slate-500 font-semibold mt-2 max-w-xl leading-relaxed">{{ mpProfile.bio }}</p>
+            </div>
+            <!-- Overall Score Badge -->
+            <div class="shrink-0 text-center bg-slate-50 border border-slate-100 rounded-xl p-5 min-w-[110px]">
+              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Overall Score</span>
+              <span class="text-4xl font-display font-black leading-none" :class="perf.textClass">{{ overallScore }}</span>
+              <span class="text-xs font-bold text-slate-400">/100</span>
+              <div class="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700" :class="perf.bgClass" :style="`width: ${overallScore}%`"></div>
+              </div>
+              <span class="block text-[9px] font-black uppercase tracking-widest mt-2" :class="perf.textClass">{{ perf.label }}</span>
+            </div>
+          </div>
+          <div v-if="stats" class="border-t border-slate-100 px-8 py-4 bg-slate-50 flex flex-wrap gap-6 text-xs font-semibold text-slate-500">
+            <span><span class="font-black text-slate-800">{{ stats.total }}</span> Total Reports</span>
+            <span><span class="font-black text-emerald-600">{{ stats.byStatus?.resolved ?? 0 }}</span> Resolved</span>
+            <span><span class="font-black text-amber-600">{{ stats.byStatus?.under_review ?? 0 }}</span> Under Review</span>
+            <span><span class="font-black text-rose-600">{{ stats.ignoredCount ?? 0 }}</span> Ignored</span>
+            <span><span class="font-black text-slate-800">{{ stats.byStatus?.pending ?? 0 }}</span> Pending</span>
+          </div>
+        </div>
+
+        <!-- Circle Charts -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          <!-- Response Rate -->
+          <div class="bg-white rounded-xl shadow-civic border border-slate-200 p-8 flex flex-col items-center text-center">
+            <div class="flex items-center gap-2 mb-6 self-start">
+              <MessageSquare class="w-4 h-4 text-civic-blue" />
+              <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Response Rate</span>
+            </div>
+            <svg width="120" height="120" viewBox="0 0 120 120" class="-rotate-90">
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#e2e8f0" stroke-width="10" />
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#2b6cb0" stroke-width="10"
+                      stroke-linecap="round"
+                      :stroke-dasharray="CIRCUMFERENCE"
+                      :stroke-dashoffset="dashOffset(responseRate)"
+                      class="transition-all duration-700" />
+            </svg>
+            <span class="text-4xl font-display font-black text-civic-blue -mt-2">{{ responseRate }}<span class="text-xl">%</span></span>
+            <p class="text-[10px] font-semibold text-slate-400 mt-2 max-w-[160px] leading-relaxed">
+              Percentage of reports where the MP or office took action
+            </p>
+          </div>
+
+          <!-- Resolution Rate -->
+          <div class="bg-white rounded-xl shadow-civic border border-slate-200 p-8 flex flex-col items-center text-center">
+            <div class="flex items-center gap-2 mb-6 self-start">
+              <CheckCircle class="w-4 h-4 text-emerald-500" />
+              <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Resolution Rate</span>
+            </div>
+            <svg width="120" height="120" viewBox="0 0 120 120" class="-rotate-90">
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#e2e8f0" stroke-width="10" />
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#10b981" stroke-width="10"
+                      stroke-linecap="round"
+                      :stroke-dasharray="CIRCUMFERENCE"
+                      :stroke-dashoffset="dashOffset(resolutionRate)"
+                      class="transition-all duration-700" />
+            </svg>
+            <span class="text-4xl font-display font-black text-emerald-500 -mt-2">{{ resolutionRate }}<span class="text-xl">%</span></span>
+            <p class="text-[10px] font-semibold text-slate-400 mt-2 max-w-[160px] leading-relaxed">
+              Percentage of community reports that were fully resolved
+            </p>
+          </div>
+
+          <!-- Ignored Reports -->
+          <div class="bg-white rounded-xl shadow-civic border border-slate-200 p-8 flex flex-col items-center text-center">
+            <div class="flex items-center gap-2 mb-6 self-start">
+              <AlertTriangle class="w-4 h-4 text-rose-500" />
+              <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Ignored Reports</span>
+            </div>
+            <svg width="120" height="120" viewBox="0 0 120 120" class="-rotate-90">
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#e2e8f0" stroke-width="10" />
+              <circle cx="60" cy="60" :r="R" fill="none" stroke="#f43f5e" stroke-width="10"
+                      stroke-linecap="round"
+                      :stroke-dasharray="CIRCUMFERENCE"
+                      :stroke-dashoffset="dashOffset(ignoredRate)"
+                      class="transition-all duration-700" />
+            </svg>
+            <span class="text-4xl font-display font-black text-rose-500 -mt-2">{{ ignoredRate }}<span class="text-xl">%</span></span>
+            <p class="text-[10px] font-semibold text-slate-400 mt-2 max-w-[160px] leading-relaxed">
+              Percentage of reports marked as ignored with no response
+            </p>
+          </div>
+
+        </div>
+
+        <!-- View Full Profile link -->
+        <div v-if="mp" class="text-center pt-2">
+          <NuxtLink :to="`/mp/${constituency}`"
+                    class="inline-flex items-center gap-2 text-xs font-black text-civic-blue hover:text-civic-navy uppercase tracking-widest transition-colors">
+            <Award class="w-4 h-4" />
+            View Full MP Profile &amp; Reports &rarr;
+          </NuxtLink>
+        </div>
+      </template>
+
+    </div>
   </div>
 </template>

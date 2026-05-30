@@ -1,6 +1,6 @@
 const CONSTITUENCIES = [
   // Ashanti (47)
-  { id: 'mp_1', name: 'Suame', region: 'Ashanti', party: 'NPP', mpName: 'Osei Kyei-Mensah' },
+  { id: 'suame', name: 'Suame', region: 'Ashanti', party: 'NPP', mpName: 'Osei Kyei-Mensah' },
   { id: 'adansi-asokwa', name: 'Adansi-Asokwa', region: 'Ashanti', party: 'NPP', mpName: 'Kobina Tahir Hammond' },
   { id: 'afigya-kwabre-north', name: 'Afigya Kwabre North', region: 'Ashanti', party: 'NPP', mpName: 'Collins Adomako-Mensah' },
   { id: 'afigya-kwabre-south', name: 'Afigya Kwabre South', region: 'Ashanti', party: 'NPP', mpName: 'William Owuraku Aidoo' },
@@ -157,7 +157,7 @@ const CONSTITUENCIES = [
   { id: 'ketu-south', name: 'Ketu South', region: 'Volta', party: 'NDC', mpName: 'Dzifa Abla Gomashie' },
   { id: 'kpando', name: 'Kpando', region: 'Volta', party: 'NDC', mpName: 'Della Sowah' },
   { id: 'north-dayi', name: 'North Dayi', region: 'Volta', party: 'NDC', mpName: 'Joycelyn Tetteh' },
-  { id: 'mp_2', name: 'North Tongu', region: 'Volta', party: 'NDC', mpName: 'Samuel Okudzeto Ablakwa' },
+  { id: 'north-tongu', name: 'North Tongu', region: 'Volta', party: 'NDC', mpName: 'Samuel Okudzeto Ablakwa' },
   { id: 'south-dayi', name: 'South Dayi', region: 'Volta', party: 'NDC', mpName: 'Rockson-Nelson Dafeamekpor' },
   { id: 'south-tongu', name: 'South Tongu', region: 'Volta', party: 'NDC', mpName: 'Kobena Woyome' },
 
@@ -174,7 +174,7 @@ const CONSTITUENCIES = [
   { id: 'savelugu', name: 'Savelugu', region: 'Northern', party: 'NDC', mpName: 'Ibrahim Ibrahim' },
   { id: 'tamale-central', name: 'Tamale Central', region: 'Northern', party: 'NDC', mpName: 'Ibrahim Muhammed' },
   { id: 'tamale-north', name: 'Tamale North', region: 'Northern', party: 'NDC', mpName: 'Alhassan Suhuyini' },
-  { id: 'mp_3', name: 'Tamale South', region: 'Northern', party: 'NDC', mpName: 'Haruna Iddrisu' },
+  { id: 'tamale-south', name: 'Tamale South', region: 'Northern', party: 'NDC', mpName: 'Haruna Iddrisu' },
   { id: 'tatale-sanguli', name: 'Tatale-Sanguli', region: 'Northern', party: 'NPP', mpName: 'Tornam L. Kaboyee' },
   { id: 'tolon', name: 'Tolon', region: 'Northern', party: 'NPP', mpName: 'Habib Iddrisu' },
   { id: 'wulensi', name: 'Wulensi', region: 'Northern', party: 'NPP', mpName: 'Abukari Dawuni' },

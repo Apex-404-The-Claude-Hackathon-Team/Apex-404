@@ -1,3 +1,15 @@
+declare module '#app' {
+  interface NuxtApp {
+    $api: ReturnType<typeof $fetch.create>
+  }
+}
+
+declare module 'vue' {
+  interface ComponentCustomProperties {
+    $api: ReturnType<typeof $fetch.create>
+  }
+}
+
 export default defineNuxtPlugin((nuxtApp) => {
 
   const config = useRuntimeConfig()

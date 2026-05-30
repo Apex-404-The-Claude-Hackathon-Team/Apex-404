@@ -16,9 +16,9 @@ const { data: constituenciesData } = await useAsyncData<any>('layout-constituenc
 })
 
 const fallbackMps = [
-    { id: 'mp_1', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
-    { id: 'mp_2', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
-    { id: 'mp_3', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+    { id: 'suame', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
+    { id: 'north-tongu', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
+    { id: 'tamale-south', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
 ]
 
 const constituenciesList = computed(() => {
@@ -136,7 +136,7 @@ const currentConstituency = computed(() => {
                 <!-- Desktop Navigation -->
                 <nav class="hidden lg:flex items-center gap-1">
                     <NuxtLink to="/" class="relative group px-5 py-7 text-xs font-black uppercase tracking-widest transition-colors" :class="isDashboardActive ? 'text-white' : 'text-slate-300 hover:text-white'">
-                        <span>Dashboard</span>
+                        <span>Home</span>
                         <span class="absolute bottom-0 left-5 right-5 h-[2px] bg-civic-blue transition-transform origin-left" :class="isDashboardActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'"></span>
                     </NuxtLink>
                     <NuxtLink to="/report" class="relative group px-5 py-7 text-xs font-black uppercase tracking-widest transition-colors" :class="isReportActive ? 'text-white' : 'text-slate-300 hover:text-white'">
@@ -187,7 +187,7 @@ const currentConstituency = computed(() => {
             
             <!-- Mobile Menu Dropdown -->
             <div v-if="mobileMenuOpen" class="lg:hidden absolute top-[100%] left-0 w-full bg-[#0c1220] border-b border-white/10 shadow-2xl flex flex-col z-50">
-                <NuxtLink @click="mobileMenuOpen = false" to="/" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isDashboardActive ? 'text-civic-blue bg-white/5' : 'text-white hover:text-slate-200'">Dashboard</NuxtLink>
+                <NuxtLink @click="mobileMenuOpen = false" to="/" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isDashboardActive ? 'text-civic-blue bg-white/5' : 'text-white hover:text-slate-200'">Home</NuxtLink>
                 <NuxtLink @click="mobileMenuOpen = false" to="/report" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isReportActive ? 'text-civic-gold bg-white/5' : 'text-white hover:text-slate-200'">Submit Issue</NuxtLink>
                 <NuxtLink @click="mobileMenuOpen = false" to="/scorecards" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isScorecardsActive ? 'text-civic-blue bg-white/5' : 'text-white hover:text-slate-200'">MP Scorecards</NuxtLink>
                 <NuxtLink @click="mobileMenuOpen = false" to="/projects" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isProjectsActive ? 'text-civic-gold bg-white/5' : 'text-white hover:text-slate-200'">Project Tracker</NuxtLink>

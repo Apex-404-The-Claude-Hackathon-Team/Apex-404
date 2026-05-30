@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const Project = require('../models/Project');
+const Notification = require('../models/Notification');
 const { uploadStream, deleteAsset } = require('../config/cloudinary');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -135,6 +136,17 @@ exports.updateStatus = async (req, res) => {
   if (req.body.status === 'completed') project.actualEndDate = new Date();
 
   await project.save();
+
+  if (project.constituency) {
+    await Notification.create({
+      constituency: project.constituency,
+      title: 'Project Status Updated',
+      message: `The project "${project.title}" status has been updated to "${req.body.status.replace(/_/g, ' ')}".`,
+      type: 'project',
+      relatedId: project._id,
+    }).catch(err => console.error('Notification failed:', err));
+  }
+
   res.json({ project });
 };
 
@@ -154,6 +166,16 @@ exports.addUpdate = async (req, res) => {
   project.updates.push({ author: req.user.id, body: req.body.body, images });
   await project.save();
   await project.populate('updates.author', 'firstName lastName');
+
+  if (project.constituency) {
+    await Notification.create({
+      constituency: project.constituency,
+      title: 'Project Progress Logged',
+      message: `A new update has been posted on the project "${project.title}": "${req.body.body.slice(0, 100)}${req.body.body.length > 100 ? '...' : ''}"`,
+      type: 'project',
+      relatedId: project._id,
+    }).catch(err => console.error('Notification failed:', err));
+  }
 
   const latest = project.updates[project.updates.length - 1];
   res.status(201).json({ update: latest });

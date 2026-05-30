@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const Post = require('../models/Post');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { uploadStream, deleteAsset } = require('../config/cloudinary');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -131,6 +132,17 @@ exports.updateStatus = async (req, res) => {
   if (status === 'resolved') post.resolvedAt = new Date();
 
   await post.save();
+
+  if (post.constituency) {
+    await Notification.create({
+      constituency: post.constituency,
+      title: 'Official Response Posted',
+      message: `An official response statement has been published for "${post.title}" (Status: ${status.replace(/_/g, ' ')}).`,
+      type: 'report',
+      relatedId: post._id,
+    }).catch(err => console.error('Notification failed:', err));
+  }
+
   res.json({ post });
 };
 

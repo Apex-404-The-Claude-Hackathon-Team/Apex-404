@@ -43,13 +43,41 @@ const getStatusLabel = (status: string) => {
   return mapping[status] || status
 }
 
+// Fetch live constituencies
+const { data: constituenciesData } = await useAsyncData<any>('feed-constituencies', () => {
+    return $api('/api/location/constituencies')
+})
+
+const fallbackMps = [
+    { id: 'suame', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
+    { id: 'north-tongu', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
+    { id: 'tamale-south', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+]
+
+const constituenciesList = computed(() => {
+    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+        ? constituenciesData.value.constituencies
+        : fallbackMps
+})
+
+const selectedConstituency = ref<string>('all')
+
+// Default to user's constituency if authenticated
+if (auth.isAuthenticated && auth.user?.constituency) {
+    selectedConstituency.value = auth.user.constituency
+}
+
 // Fetch posts from backend
 const { data: postsData, refresh: refreshReports } = await useAsyncData<any>('reports', () => {
+  const queryParams: any = { limit: 100 }
+  if (selectedConstituency.value !== 'all') {
+    queryParams.constituency = selectedConstituency.value
+  }
   return $api('/api/posts', {
-    query: {
-      limit: 100
-    }
+    query: queryParams
   })
+}, {
+  watch: [selectedConstituency]
 })
 
 const reports = computed(() => postsData.value?.posts || [])
@@ -97,7 +125,27 @@ const filteredReports = computed(() => {
   return list
 })
 
-const recentNews = ref<any[]>([])
+const { data: notificationsData } = await useAsyncData<any>('notifications', () => {
+  const queryParams: any = {}
+  if (selectedConstituency.value !== 'all') {
+    queryParams.constituency = selectedConstituency.value
+  }
+  return $api('/api/notifications', {
+    query: queryParams
+  })
+}, {
+  watch: [selectedConstituency]
+})
+
+const recentNews = computed(() => {
+  return (notificationsData.value?.notifications || []).map((n: any) => ({
+    id: n._id,
+    tag: n.type.toUpperCase(),
+    title: n.title,
+    message: n.message,
+    date: formatDate(n.createdAt)
+  }))
+})
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -205,15 +253,18 @@ const formatDate = (dateString: string) => {
                 <ShieldAlert class="w-4.5 h-4.5 text-civic-gold" /> Important Public Notices
               </h3>
             </div>
-            <div class="p-0 divide-y divide-slate-100">
+             <div class="p-0 divide-y divide-slate-100">
               <div v-if="recentNews.length === 0" class="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">
-                No public notices published.
+                No public notifications or alerts published.
               </div>
-              <a v-else href="#" v-for="news in recentNews" :key="news.id" class="block p-4.5 hover:bg-slate-50 transition-colors">
-                <span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-civic-navy text-[8px] font-black uppercase tracking-widest mb-1.5">{{ news.tag }}</span>
-                <h4 class="text-xs font-bold text-civic-navy leading-snug mb-1">{{ news.title }}</h4>
-                <span class="text-[9px] font-black text-slate-400 tracking-widest uppercase">{{ news.date }}</span>
-              </a>
+              <div v-else v-for="news in recentNews" :key="news.id" class="p-5 hover:bg-slate-50 transition-colors text-left space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-civic-navy text-[8px] font-black uppercase tracking-widest">{{ news.tag }}</span>
+                  <span class="text-[8px] font-black text-slate-400 tracking-widest uppercase">{{ news.date }}</span>
+                </div>
+                <h4 class="text-xs font-bold text-civic-navy leading-snug">{{ news.title }}</h4>
+                <p class="text-[11px] text-slate-500 font-semibold leading-relaxed">{{ news.message }}</p>
+              </div>
             </div>
           </div>
 
@@ -228,11 +279,27 @@ const formatDate = (dateString: string) => {
         
         <!-- Feed Header -->
         <div class="bg-civic-navy px-8 py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5">
-          <div>
+          <div class="flex flex-col gap-1">
               <h2 class="text-sm font-display font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <Users class="w-4 h-4 text-civic-blue" /> Recent Reports from Citizens
               </h2>
-              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Accra Central District</p>
+              <div class="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                  <span>Viewing Feed For:</span>
+                  <select 
+                    v-model="selectedConstituency" 
+                    class="bg-transparent text-slate-300 border-none font-bold outline-none cursor-pointer text-[9px] uppercase tracking-widest focus:ring-0 p-0"
+                  >
+                      <option value="all" class="bg-[#0c1220] text-slate-400">All Constituencies</option>
+                      <option 
+                        v-for="item in constituenciesList" 
+                        :key="item.id" 
+                        :value="item.id" 
+                        class="bg-[#0c1220] text-white"
+                      >
+                          {{ item.name }}
+                      </option>
+                  </select>
+              </div>
           </div>
           
           <!-- sorting selectors -->
@@ -328,7 +395,7 @@ const formatDate = (dateString: string) => {
         
         <div class="bg-slate-50 p-5 border-t border-slate-200 text-center">
           <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">
-            Accra Central Constituency Data Feed Node &bull; VoiceUp
+            {{ selectedConstituency === 'all' ? 'All Ghana' : constituenciesList.find((c: any) => c.id === selectedConstituency)?.name || 'Local' }} Constituency Data Feed Node &bull; VoiceUp
           </span>
         </div>
 
