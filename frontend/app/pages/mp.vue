@@ -25,7 +25,16 @@ const submittingProject = ref(false)
 // Message Banner
 const notificationMsg = ref('')
 
-const constituencyId = computed(() => auth.user?.constituency || 'mp_1')
+const constituencyId = computed(() => auth.user?.constituency || '')
+
+// Fetch constituencies config to look up display names
+const { data: constituenciesData } = await useAsyncData<any>('mp-constituencies', () =>
+  $api('/api/location/constituencies').catch(() => ({ constituencies: [] }))
+)
+const constituencyName = computed(() => {
+  const list: any[] = constituenciesData.value?.constituencies || []
+  return list.find((c: any) => c.id === constituencyId.value)?.name || constituencyId.value || 'Constituency'
+})
 
 // Fetch constituency posts
 const { data: postsData, refresh: refreshReports } = await useAsyncData<any>('mp-reports', () => {
@@ -237,7 +246,7 @@ const formatDate = (dateString: string) => {
           <header class="h-[85px] bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
              <div>
                  <h1 class="text-xl font-display font-black text-slate-800 uppercase tracking-wider">Office Telemetry Node</h1>
-                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{{ auth.user?.constituency === 'mp_1' ? 'Suame District Assembly' : auth.user?.constituency === 'mp_2' ? 'North Tongu Assembly' : auth.user?.constituency === 'mp_3' ? 'Tamale South' : 'Accra Central Constituency' }}</p>
+                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{{ constituencyName }} Constituency</p>
              </div>
              <div>
                  <span class="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-200 font-black px-3 py-1.5 rounded uppercase tracking-widest shadow-sm">

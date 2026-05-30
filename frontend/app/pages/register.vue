@@ -20,15 +20,16 @@ const { data: constituenciesData } = await useAsyncData<any>('ghana-constituenci
 })
 
 const fallbackMps = [
-    { id: 'mp_1', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
-    { id: 'mp_2', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
-    { id: 'mp_3', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+    { id: 'suame', name: 'Suame', mpName: 'Osei Kyei-Mensah', region: 'Ashanti', party: 'NPP' },
+    { id: 'north-tongu', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa', region: 'Volta', party: 'NDC' },
+    { id: 'tamale-south', name: 'Tamale South', mpName: 'Haruna Iddrisu', region: 'Northern', party: 'NDC' }
 ]
 
 const constituenciesList = computed(() => {
-    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+    const raw = constituenciesData.value?.constituencies?.length
         ? constituenciesData.value.constituencies
         : fallbackMps
+    return [...raw].sort((a: any, b: any) => a.name.localeCompare(b.name))
 })
 
 const getConstituencyLabel = (item: any) => {
@@ -89,10 +90,13 @@ watch(searchQuery, (newVal) => {
     }
 })
 
-// Click Away Handler
+// Click Away Handler — clear typed text if no valid selection was made
 const handleDocumentClick = (e: MouseEvent) => {
     if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
         showDropdown.value = false
+        if (!form.value.constituency) {
+            searchQuery.value = ''
+        }
     }
 }
 

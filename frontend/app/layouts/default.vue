@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router'
 const auth = useAuthStore()
 const route = useRoute()
 const mobileMenuOpen = ref(false)
+const { toast: globalToast, hide: hideToast } = useToast()
 
 const { $api } = useNuxtApp() as any
 
@@ -22,9 +23,10 @@ const fallbackMps = [
 ]
 
 const constituenciesList = computed(() => {
-    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+    const raw = constituenciesData.value?.constituencies?.length
         ? constituenciesData.value.constituencies
         : fallbackMps
+    return [...raw].sort((a: any, b: any) => a.name.localeCompare(b.name))
 })
 
 const getShortLabel = (item: any) => {
@@ -283,5 +285,31 @@ const currentConstituency = computed(() => {
         
         <!-- Voice Assistant Floating Node for Accessibility -->
         <UiVoiceAssistant />
+
+        <!-- Global Toast Popup -->
+        <Transition
+          enter-active-class="transition-all duration-300 ease-out"
+          enter-from-class="opacity-0 -translate-y-3 scale-95"
+          enter-to-class="opacity-100 translate-y-0 scale-100"
+          leave-active-class="transition-all duration-200 ease-in"
+          leave-from-class="opacity-100 translate-y-0 scale-100"
+          leave-to-class="opacity-0 -translate-y-3 scale-95"
+        >
+          <div
+            v-if="globalToast.visible"
+            class="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] w-[90vw] max-w-md rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.25)] px-5 py-4 flex items-start gap-4 border pointer-events-auto"
+            :class="{
+              'bg-rose-600 border-rose-500 text-white': globalToast.type === 'error',
+              'bg-emerald-600 border-emerald-500 text-white': globalToast.type === 'success',
+              'bg-amber-500 border-amber-400 text-white': globalToast.type === 'warning'
+            }"
+          >
+            <div class="shrink-0 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-base font-black">
+              {{ globalToast.type === 'error' ? '!' : globalToast.type === 'success' ? '✓' : '⚠' }}
+            </div>
+            <p class="flex-1 text-sm font-semibold leading-relaxed pt-0.5">{{ globalToast.message }}</p>
+            <button @click="hideToast" class="shrink-0 font-black text-white/70 hover:text-white text-xl leading-none mt-0.5 cursor-pointer">&times;</button>
+          </div>
+        </Transition>
     </div>
 </template>

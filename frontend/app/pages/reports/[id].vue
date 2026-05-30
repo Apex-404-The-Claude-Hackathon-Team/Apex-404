@@ -2,7 +2,7 @@
 import { useRoute } from 'vue-router'
 import { ref, computed } from 'vue'
 import { useAuthStore } from '~/stores/auth'
-import { ArrowLeft, MapPin, Clock, ThumbsUp, ShieldAlert, Flag, CheckCircle, Cpu, MessageSquare } from '@lucide/vue'
+import { ArrowLeft, MapPin, Clock, ThumbsUp, ShieldAlert, Flag, CheckCircle, MessageSquare } from '@lucide/vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -27,14 +27,7 @@ const getCategoryLabel = (cat: string) => {
   return CATEGORY_MAP[cat] || cat
 }
 
-const getMpName = (constituency: string) => {
-  const mapping: Record<string, string> = {
-    mp_1: 'Hon. Osei Kyei-Mensah',
-    mp_2: 'Hon. Samuel Okudzeto Ablakwa',
-    mp_3: 'Hon. Haruna Iddrisu'
-  }
-  return mapping[constituency] || 'Constituency Office'
-}
+const getMpName = (_constituency: string) => 'Constituency Office'
 
 // Fetch single report from backend
 const { data: reportData, refresh: refreshReport } = await useAsyncData(`report-${id}`, () => {
@@ -54,11 +47,17 @@ const comments = computed(() => {
   return commentsData.value?.comments || []
 })
 
-const localUpvotes = ref(0)
+const { show: showToast } = useToast()
+
 const endorseReport = async () => {
-  if (!auth.isAuthenticated) {
-    return navigateTo('/login')
+  if (!auth.isAuthenticated) return navigateTo('/login')
+
+  const reportConstituency = report.value?.constituency
+  if (auth.user?.constituency && reportConstituency && auth.user.constituency !== reportConstituency) {
+    showToast('You can only back issues in your own constituency. This report belongs to a different one.')
+    return
   }
+
   try {
     await $api(`/api/posts/${id}/upvote`, { method: 'POST' })
     await refreshReport()

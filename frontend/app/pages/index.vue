@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ArrowUpRight, MapPin, Building, ShieldAlert, Lightbulb, Clock, CheckCircle, ThumbsUp, ArrowRight, Flame, Cpu, Users, Eye, Mic, HardHat, Award } from '@lucide/vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ArrowUpRight, MapPin, Building, ShieldAlert, Lightbulb, Clock, CheckCircle, ThumbsUp, ArrowRight, Flame, Cpu, Users, Eye, Mic, HardHat, Award, Landmark, Search } from '@lucide/vue'
 import { useAuthStore } from '~/stores/auth'
 import MapWidget from '~/components/ui/MapWidget.vue'
 
@@ -55,12 +55,48 @@ const fallbackMps = [
 ]
 
 const constituenciesList = computed(() => {
-    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+    const raw = constituenciesData.value?.constituencies?.length
         ? constituenciesData.value.constituencies
         : fallbackMps
+    return [...raw].sort((a: any, b: any) => a.name.localeCompare(b.name))
 })
 
 const selectedConstituency = ref<string>('all')
+
+// Constituency search bar for the feed header
+const constituencySearch = ref('')
+const showConstituencyDropdown = ref(false)
+const constituencyDropdownRef = ref<HTMLElement | null>(null)
+
+const filteredConstituenciesFeed = computed(() => {
+    const q = constituencySearch.value.toLowerCase().trim()
+    if (!q) return constituenciesList.value
+    return constituenciesList.value.filter((item: any) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.mpName && item.mpName.toLowerCase().includes(q)) ||
+        (item.region && item.region.toLowerCase().includes(q))
+    )
+})
+
+const selectFeedConstituency = (id: string, name: string) => {
+    selectedConstituency.value = id
+    constituencySearch.value = name
+    showConstituencyDropdown.value = false
+}
+
+watch(selectedConstituency, (val) => {
+    if (val === 'all') { constituencySearch.value = ''; return }
+    const match = constituenciesList.value.find((c: any) => c.id === val)
+    if (match) constituencySearch.value = match.name
+}, { immediate: true })
+
+const handleFeedClickOutside = (e: MouseEvent) => {
+    if (constituencyDropdownRef.value && !constituencyDropdownRef.value.contains(e.target as Node)) {
+        showConstituencyDropdown.value = false
+    }
+}
+onMounted(() => document.addEventListener('click', handleFeedClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleFeedClickOutside))
 
 // Default to user's constituency if authenticated
 if (auth.isAuthenticated && auth.user?.constituency) {
@@ -84,14 +120,18 @@ const reports = computed(() => postsData.value?.posts || [])
 const categories = ['all', 'Infrastructure & Roads', 'Water & Utilities', 'Public Health & Sanitation', 'Education & Schools', 'Security & Zoning']
 
 // Stateful Upvoting
-const backIssue = async (reportId: string) => {
-  if (!auth.isAuthenticated) {
-    return navigateTo('/login')
+const { show: showToast } = useToast()
+
+const backIssue = async (reportId: string, reportConstituency: string) => {
+  if (!auth.isAuthenticated) return navigateTo('/login')
+
+  if (auth.user?.constituency && reportConstituency && auth.user.constituency !== reportConstituency) {
+    showToast('You can only back issues in your own constituency. This report belongs to a different one.')
+    return
   }
+
   try {
-    await $api(`/api/posts/${reportId}/upvote`, {
-      method: 'POST'
-    })
+    await $api(`/api/posts/${reportId}/upvote`, { method: 'POST' })
     await refreshReports()
   } catch (err) {
     console.error('Error upvoting report:', err)
@@ -179,7 +219,7 @@ const formatDate = (dateString: string) => {
         </p>
 
         <!-- Big Visual action buttons/cards for accessibility -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 w-full max-w-3xl">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-6 w-full max-w-4xl">
           <NuxtLink to="/report" class="bg-white/5 hover:bg-white/10 border border-white/10 p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-4 transition-all group hover:border-civic-gold/50 cursor-pointer shadow-lg hover-lift">
             <div class="w-14 h-14 rounded-full bg-civic-gold flex items-center justify-center p-3 text-civic-navy-dark shadow-lg shadow-civic-gold/20 group-hover:scale-105 transition-transform">
               <Mic class="w-7 h-7" />
@@ -207,6 +247,16 @@ const formatDate = (dateString: string) => {
             <div>
               <h3 class="text-white font-bold text-xs uppercase tracking-wider">MP Scorecards</h3>
               <p class="text-slate-400 text-[11px] mt-1 leading-normal font-semibold">Click here to check how active and responsive your MP is.</p>
+            </div>
+          </NuxtLink>
+
+          <NuxtLink to="/mp" class="bg-white/5 hover:bg-white/10 border border-white/10 p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-4 transition-all group hover:border-amber-400/50 cursor-pointer shadow-lg hover-lift">
+            <div class="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center p-3 text-amber-400 shadow-lg shadow-amber-500/10 group-hover:scale-105 transition-transform border border-amber-500/20">
+              <Landmark class="w-7 h-7" />
+            </div>
+            <div>
+              <h3 class="text-amber-400 font-bold text-xs uppercase tracking-wider">MP Console</h3>
+              <p class="text-slate-400 text-[11px] mt-1 leading-normal font-semibold">Elected representatives — access your official constituency portal.</p>
             </div>
           </NuxtLink>
         </div>
@@ -283,22 +333,44 @@ const formatDate = (dateString: string) => {
               <h2 class="text-sm font-display font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <Users class="w-4 h-4 text-civic-blue" /> Recent Reports from Citizens
               </h2>
-              <div class="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                  <span>Viewing Feed For:</span>
-                  <select 
-                    v-model="selectedConstituency" 
-                    class="bg-transparent text-slate-300 border-none font-bold outline-none cursor-pointer text-[9px] uppercase tracking-widest focus:ring-0 p-0"
-                  >
-                      <option value="all" class="bg-[#0c1220] text-slate-400">All Constituencies</option>
-                      <option 
-                        v-for="item in constituenciesList" 
-                        :key="item.id" 
-                        :value="item.id" 
-                        class="bg-[#0c1220] text-white"
+              <div class="relative mt-1.5" ref="constituencyDropdownRef">
+                  <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Viewing Feed For</p>
+                  <div class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 w-56 focus-within:border-civic-blue/50 transition-colors">
+                      <Search class="w-3 h-3 text-slate-400 shrink-0" />
+                      <input
+                        v-model="constituencySearch"
+                        @focus="showConstituencyDropdown = true"
+                        @input="showConstituencyDropdown = true"
+                        placeholder="Search constituency..."
+                        class="bg-transparent text-slate-200 border-none font-bold outline-none text-[10px] tracking-wide focus:ring-0 p-0 w-full placeholder:text-slate-500 cursor-text"
+                      />
+                  </div>
+                  <!-- Searchable Dropdown -->
+                  <div v-if="showConstituencyDropdown"
+                       class="absolute top-full left-0 mt-2 w-72 max-h-60 overflow-y-auto bg-[#0c1220] border border-white/10 rounded-xl shadow-2xl z-50 divide-y divide-white/5">
+                      <button
+                        type="button"
+                        @click="selectFeedConstituency('all', '')"
+                        class="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-colors hover:bg-white/5"
+                        :class="selectedConstituency === 'all' ? 'text-civic-blue' : 'text-slate-400'"
                       >
-                          {{ item.name }}
-                      </option>
-                  </select>
+                          All Constituencies
+                      </button>
+                      <button
+                        v-for="item in filteredConstituenciesFeed"
+                        :key="item.id"
+                        type="button"
+                        @click="selectFeedConstituency(item.id, item.name)"
+                        class="w-full text-left px-4 py-2.5 flex flex-col gap-0.5 hover:bg-white/5 transition-colors"
+                        :class="selectedConstituency === item.id ? 'bg-white/5' : ''"
+                      >
+                          <span class="text-[10px] font-bold text-white">{{ item.name }}</span>
+                          <span class="text-[8px] font-semibold text-slate-500 uppercase tracking-wider">{{ item.region }} &bull; {{ item.party }}</span>
+                      </button>
+                      <div v-if="filteredConstituenciesFeed.length === 0" class="px-4 py-3 text-[10px] text-slate-500 font-semibold italic">
+                          No constituencies match "{{ constituencySearch }}"
+                      </div>
+                  </div>
               </div>
           </div>
           
@@ -343,7 +415,7 @@ const formatDate = (dateString: string) => {
                 {{ (report.upvotes?.length || report.upvoteCount || 0).toLocaleString() }}
               </span>
               <button 
-                @click="backIssue(report._id)"
+                @click="backIssue(report._id, report.constituency)"
                 class="w-full bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-2 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm hover:shadow active:scale-95 cursor-pointer"
               >
                 <ThumbsUp class="w-3 h-3" /> Support

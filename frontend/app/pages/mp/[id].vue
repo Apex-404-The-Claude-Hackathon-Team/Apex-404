@@ -118,42 +118,13 @@ const mpData = computed(() => {
     ignoredCount: 0
   }
 
-  if (id === 'mp_2') {
-    defaultDetails = {
-      name: 'Hon. Samuel Okudzeto Ablakwa',
-      party: 'NDC',
-      constituency: 'North Tongu Assembly',
-      region: 'Volta Region',
-      contact: 'samuel.ablakwa@parwahl.gh | +233 20 898 7654',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
-      bio: 'Representing North Tongu with dedication and focus on water access and education.',
-      wardFilters: ['Nhyiaeso'],
-      responseRate: 78,
-      resolutionRate: 52,
-      ignoredCount: 5
-    }
-  } else if (id === 'mp_3') {
-    defaultDetails = {
-      name: 'Hon. Haruna Iddrisu',
-      party: 'NDC',
-      constituency: 'Tamale South',
-      region: 'Northern Region',
-      contact: 'haruna.iddrisu@parliament.gh | +233 24 412 3456',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
-      bio: 'Serving the people of Tamale South with emphasis on health facilities and youth development.',
-      wardFilters: ['Santasi'],
-      responseRate: 92,
-      resolutionRate: 74,
-      ignoredCount: 2
-    }
-  }
-
   const name = profile?.user
     ? `Hon. ${profile.user.firstName} ${profile.user.lastName}`
     : defaultDetails.name
-  
+
   const party = profile?.party || defaultDetails.party
-  const constituency = profile?.constituency === 'mp_1' ? 'Suame District Assembly' : profile?.constituency === 'mp_2' ? 'North Tongu Assembly' : profile?.constituency === 'mp_3' ? 'Tamale South' : defaultDetails.constituency
+  const constituencyDetails = constituenciesData.value?.constituencies?.find((c: any) => c.id === (profile?.constituency || id))
+  const constituency = constituencyDetails ? `${constituencyDetails.name} Assembly` : defaultDetails.constituency
   const contact = (profile?.contactEmail && profile?.contactPhone)
     ? `${profile.contactEmail} | ${profile.contactPhone}`
     : defaultDetails.contact
@@ -177,14 +148,18 @@ const mpData = computed(() => {
 })
 
 // Upvoting inside dynamic feed
-const backIssue = async (reportId: string) => {
-  if (!auth.isAuthenticated) {
-    return navigateTo('/login')
+const { show: showToast } = useToast()
+
+const backIssue = async (reportId: string, reportConstituency: string) => {
+  if (!auth.isAuthenticated) return navigateTo('/login')
+
+  if (auth.user?.constituency && reportConstituency && auth.user.constituency !== reportConstituency) {
+    showToast('You can only back issues in your own constituency. This report belongs to a different one.')
+    return
   }
+
   try {
-    await $api(`/api/posts/${reportId}/upvote`, {
-      method: 'POST'
-    })
+    await $api(`/api/posts/${reportId}/upvote`, { method: 'POST' })
     await refreshReports()
   } catch (err) {
     console.error('Error upvoting report:', err)
@@ -382,6 +357,7 @@ const getStrokeDashOffset = (percent: number, radius: number) => {
               <!-- Left side: Feed & Project logs (8 Cols) -->
               <div class="lg:col-span-8 space-y-12">
                   
+
                   <!-- Localized Citizen Feed -->
                   <div class="bg-white rounded-lg shadow-civic border border-slate-200 overflow-hidden">
                       <div class="bg-civic-navy px-8 py-5 border-b border-white/5 flex flex-wrap justify-between items-center gap-4 text-left">
@@ -426,7 +402,7 @@ const getStrokeDashOffset = (percent: number, radius: number) => {
                               <div class="sm:w-24 shrink-0 flex flex-col items-center justify-center">
                                   <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Backing</span>
                                   <span class="bg-slate-50 text-slate-700 font-black text-xl px-4 py-2 border border-slate-200/80 rounded w-full text-center">{{ report.upvotes?.length || report.upvoteCount || 0 }}</span>
-                                  <button @click="backIssue(report._id)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
+                                  <button @click="backIssue(report._id, report.constituency)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
                                       Endorse
                                   </button>
                               </div>

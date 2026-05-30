@@ -9,10 +9,19 @@ import { useAuthStore } from '~/stores/auth'
 import MapWidget from '~/components/ui/MapWidget.vue'
 
 const route = useRoute()
-const id = String(route.params.id) // e.g. "mp_1", "mp_2", "mp_3"
+const id = String(route.params.id)
 
 const auth = useAuthStore()
 const { $api } = useNuxtApp() as any
+
+// Block regular citizens from viewing another constituency's page
+const accessDenied = computed(() => {
+  if (!auth.isAuthenticated) return false
+  const role = auth.role
+  if (role === 'mp' || role === 'admin' || role === 'super_admin' || role === 'moderator') return false
+  if (!auth.user?.constituency) return false
+  return auth.user.constituency !== id
+})
 
 const selectedFeedTab = ref<'top' | 'recent' | 'unresolved' | 'ignored'>('top')
 const selectedCategory = ref('all')
@@ -118,42 +127,13 @@ const mpData = computed(() => {
     ignoredCount: 0
   }
 
-  if (id === 'mp_2') {
-    defaultDetails = {
-      name: 'Hon. Samuel Okudzeto Ablakwa',
-      party: 'NDC',
-      constituency: 'North Tongu Assembly',
-      region: 'Volta Region',
-      contact: 'samuel.ablakwa@parwahl.gh | +233 20 898 7654',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
-      bio: 'Representing North Tongu with dedication and focus on water access and education.',
-      wardFilters: ['Nhyiaeso'],
-      responseRate: 78,
-      resolutionRate: 52,
-      ignoredCount: 5
-    }
-  } else if (id === 'mp_3') {
-    defaultDetails = {
-      name: 'Hon. Haruna Iddrisu',
-      party: 'NDC',
-      constituency: 'Tamale South',
-      region: 'Northern Region',
-      contact: 'haruna.iddrisu@parliament.gh | +233 24 412 3456',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
-      bio: 'Serving the people of Tamale South with emphasis on health facilities and youth development.',
-      wardFilters: ['Santasi'],
-      responseRate: 92,
-      resolutionRate: 74,
-      ignoredCount: 2
-    }
-  }
-
   const name = profile?.user
     ? `Hon. ${profile.user.firstName} ${profile.user.lastName}`
     : defaultDetails.name
-  
+
   const party = profile?.party || defaultDetails.party
-  const constituency = profile?.constituency === 'mp_1' ? 'Suame District Assembly' : profile?.constituency === 'mp_2' ? 'North Tongu Assembly' : profile?.constituency === 'mp_3' ? 'Tamale South' : defaultDetails.constituency
+  const constituencyDetails = constituenciesData.value?.constituencies?.find((c: any) => c.id === (profile?.constituency || id))
+  const constituency = constituencyDetails ? `${constituencyDetails.name} Assembly` : defaultDetails.constituency
   const contact = (profile?.contactEmail && profile?.contactPhone)
     ? `${profile.contactEmail} | ${profile.contactPhone}`
     : defaultDetails.contact
@@ -177,14 +157,18 @@ const mpData = computed(() => {
 })
 
 // Upvoting inside dynamic feed
-const backIssue = async (reportId: string) => {
-  if (!auth.isAuthenticated) {
-    return navigateTo('/login')
+const { show: showToast } = useToast()
+
+const backIssue = async (reportId: string, reportConstituency: string) => {
+  if (!auth.isAuthenticated) return navigateTo('/login')
+
+  if (auth.user?.constituency && reportConstituency && auth.user.constituency !== reportConstituency) {
+    showToast('You can only back issues in your own constituency. This report belongs to a different one.')
+    return
   }
+
   try {
-    await $api(`/api/posts/${reportId}/upvote`, {
-      method: 'POST'
-    })
+    await $api(`/api/posts/${reportId}/upvote`, { method: 'POST' })
     await refreshReports()
   } catch (err) {
     console.error('Error upvoting report:', err)
@@ -272,7 +256,32 @@ const formatDate = (dateString: string) => {
 
 <template>
   <div class="w-full bg-[#f8fafc] min-h-screen pb-24">
-      
+
+      <!-- Cross-constituency access error -->
+      <div v-if="accessDenied" class="min-h-screen flex items-center justify-center px-6">
+          <div class="max-w-md w-full bg-white rounded-2xl border border-rose-200 shadow-xl p-10 text-center space-y-5">
+              <div class="w-16 h-16 bg-rose-50 border border-rose-200 rounded-full flex items-center justify-center mx-auto">
+                  <ShieldAlert class="w-8 h-8 text-rose-500" />
+              </div>
+              <div>
+                  <h2 class="text-xl font-display font-black text-slate-900 uppercase tracking-tight mb-2">Access Restricted</h2>
+                  <p class="text-sm font-semibold text-slate-500 leading-relaxed">
+                      You are only permitted to view reports and data for your own constituency.
+                      Please navigate to your constituency page to see community updates.
+                  </p>
+              </div>
+              <NuxtLink
+                :to="auth.user?.constituency ? `/constituency/${auth.user.constituency}` : '/'"
+                class="inline-block bg-[#0f1524] hover:bg-black text-white text-xs font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-colors"
+              >
+                  Go to My Constituency
+              </NuxtLink>
+          </div>
+      </div>
+
+      <!-- Main content (hidden when access is denied) -->
+      <template v-if="!accessDenied">
+
       <!-- MP Profile Section with Unsplash background photo -->
       <div class="relative pt-16 pb-28 px-6 border-b border-white/5 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1600&q=80')">
           <!-- Dark overlay for text readability -->
@@ -399,7 +408,7 @@ const formatDate = (dateString: string) => {
                               <div class="sm:w-24 shrink-0 flex flex-col items-center justify-center">
                                   <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Backing</span>
                                   <span class="bg-slate-50 text-slate-700 font-black text-xl px-4 py-2 border border-slate-200/80 rounded w-full text-center">{{ report.upvotes?.length || report.upvoteCount || 0 }}</span>
-                                  <button @click="backIssue(report._id)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
+                                  <button @click="backIssue(report._id, report.constituency)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
                                       Endorse
                                   </button>
                               </div>
@@ -491,6 +500,7 @@ const formatDate = (dateString: string) => {
 
       </div>
 
+      </template><!-- end v-if="!accessDenied" -->
   </div>
 </template>
 

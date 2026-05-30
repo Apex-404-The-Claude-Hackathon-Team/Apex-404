@@ -28,15 +28,16 @@ const { data: constituenciesData } = await useAsyncData<any>('ghana-constituenci
 })
 
 const fallbackMps = [
-    { id: 'mp_1', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
-    { id: 'mp_2', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
-    { id: 'mp_3', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+    { id: 'suame', name: 'Suame', mpName: 'Osei Kyei-Mensah', region: 'Ashanti', party: 'NPP' },
+    { id: 'north-tongu', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa', region: 'Volta', party: 'NDC' },
+    { id: 'tamale-south', name: 'Tamale South', mpName: 'Haruna Iddrisu', region: 'Northern', party: 'NDC' }
 ]
 
 const constituenciesList = computed(() => {
-    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+    const raw = constituenciesData.value?.constituencies?.length
         ? constituenciesData.value.constituencies
         : fallbackMps
+    return [...raw].sort((a: any, b: any) => a.name.localeCompare(b.name))
 })
 
 const getConstituencyLabel = (item: any) => {
@@ -87,10 +88,13 @@ watch(searchQuery, (newVal) => {
     }
 })
 
-// Click Away Handler
+// Click Away Handler — clear typed text if no valid selection was made
 const handleDocumentClick = (e: MouseEvent) => {
     if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
         showDropdown.value = false
+        if (!form.value.constituency) {
+            searchQuery.value = ''
+        }
     }
 }
 
@@ -122,9 +126,9 @@ const stopRecording = () => {
   submitting.value = true
   setTimeout(() => {
     form.value.title = "Drainage Leakage at Central Market Lane"
-    form.value.category = "Water & Utilities"
+    form.value.category = "water_sanitation"
     form.value.region = "Ashanti"
-    form.value.constituency = "Suame"
+    form.value.constituency = "suame"
     form.value.ward = "Atonsu"
     form.value.street = "Central Market Lane, next to Kejetia entrance"
     form.value.body = "Voice Transcription (Translated from Twi): The primary pipeline has developed a major leakage. Clean water is wasting and flooding the street. Vendors are unable to set up their stalls. Immediate action is needed."
@@ -151,13 +155,6 @@ const mapCategoryToEnum = (cat: string) => {
   return mapping[cat] || 'other'
 }
 
-const mapConstituencyToId = (constituencyName: string) => {
-  const name = (constituencyName || '').toLowerCase()
-  if (name.includes('suame')) return 'mp_1'
-  if (name.includes('tongu')) return 'mp_2'
-  if (name.includes('tamale')) return 'mp_3'
-  return auth.user?.constituency || 'mp_1'
-}
 
 const handleSubmit = async () => {
   if (!auth.isAuthenticated) {
@@ -172,7 +169,7 @@ const handleSubmit = async () => {
       title: form.value.title,
       description: form.value.body,
       category: mapCategoryToEnum(form.value.category),
-      constituency: mapConstituencyToId(form.value.constituency),
+      constituency: form.value.constituency,
       location: JSON.stringify({
         address: form.value.street,
         city: form.value.ward,
