@@ -193,10 +193,13 @@ const selectPin = (pin: any) => {
         <div class="flex-1">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="bg-white/10 text-white/95 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-white/5">{{ selectedPin.statusLabel }}</span>
-            <span class="text-civic-gold text-[9px] font-black uppercase tracking-widest">{{ selectedPin.category }}</span>
+            <span class="text-civic-gold text-[9px] font-black uppercase tracking-widest">{{ selectedPin.category?.replace('_', ' ') || selectedPin.category }}</span>
           </div>
           <h4 class="text-sm font-bold font-display text-white leading-tight line-clamp-1">{{ selectedPin.title }}</h4>
-          <p class="text-[10px] text-slate-400 mt-1 leading-snug font-semibold line-clamp-1">{{ selectedPin.location }} &bull; {{ selectedPin.upvoteCount }} Backed</p>
+          <p class="text-[10px] text-slate-400 mt-1 leading-snug font-semibold line-clamp-1">
+            {{ selectedPin.location?.address || selectedPin.location || 'Suame' }} &bull; 
+            {{ selectedPin.upvotes?.length || selectedPin.upvoteCount || 0 }} Backed
+          </p>
         </div>
         <div class="flex gap-2 self-stretch md:self-auto shrink-0 justify-end">
           <NuxtLink :to="`/reports/${selectedPin._id}`" class="bg-civic-blue hover:bg-civic-blue-hover text-white px-3.5 py-2 text-[9px] font-black uppercase tracking-widest rounded transition-colors shadow-lg shadow-civic-blue/20">

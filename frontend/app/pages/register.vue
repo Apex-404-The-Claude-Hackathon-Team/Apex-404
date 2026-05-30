@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '~/stores/auth'
 import { Landmark, AlertCircle, Eye, EyeOff, Cpu } from '@lucide/vue'
 
 definePageMeta({ layout: false })
 
+const auth = useAuthStore()
 const router = useRouter()
 const errors = ref<string[]>([])
 const loading = ref(false)
@@ -22,9 +24,13 @@ const handleRegister = async () => {
     errors.value = []
     
     try {
-        // Mock register delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        router.push('/login')
+        await auth.register({
+            fullName: form.value.fullName,
+            email: form.value.email,
+            password: form.value.password,
+            constituency: form.value.constituency
+        })
+        router.push('/')
     } catch (err: any) {
         errors.value = [err.message || 'Registration failed']
     } finally {
@@ -33,10 +39,11 @@ const handleRegister = async () => {
 }
 
 const quickRegister = async () => {
-    form.value.fullName = 'John Citizen'
-    form.value.email = 'citizen@voiceup.gh'
+    const randomId = Math.floor(Math.random() * 10000)
+    form.value.fullName = `Citizen User ${randomId}`
+    form.value.email = `citizen_${randomId}@voiceup.gh`
     form.value.password = 'demoPassword123'
-    form.value.constituency = 'c_dummy_1'
+    form.value.constituency = 'mp_1'
     await handleRegister()
 }
 </script>
@@ -105,9 +112,9 @@ const quickRegister = async () => {
                           <label class="block text-[9px] font-black text-[#0f1524] uppercase tracking-widest mb-1">District / Constituency</label>
                           <select v-model="form.constituency" required class="w-full bg-[#f4f5f8] rounded-xl px-4 py-3 text-xs font-bold text-slate-800 outline-none border border-transparent focus:border-slate-350 transition-colors cursor-pointer border-none">
                               <option value="" disabled>Select your voting district...</option>
-                              <option value="c_dummy_1">Accra Central District</option>
-                              <option value="c_dummy_2">Kumasi Metro Area</option>
-                              <option value="c_dummy_3">Tamale South</option>
+                              <option value="mp_1">Suame (Osei Kyei-Mensah)</option>
+                              <option value="mp_2">North Tongu (Samuel Okudzeto Ablakwa)</option>
+                              <option value="mp_3">Tamale South (Haruna Iddrisu)</option>
                           </select>
                       </div>
 

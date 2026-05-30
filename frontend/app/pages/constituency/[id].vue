@@ -1,97 +1,205 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { ref, computed } from 'vue'
-import { MapPin, Phone, Mail, Clock, ThumbsUp, Building, ArrowRight, ShieldAlert, Cpu, Award, CheckCircle, Flame, Star, Activity, AlertTriangle, AlertOctagon, HelpCircle } from '@lucide/vue'
+import { 
+  MapPin, Phone, Mail, Clock, ThumbsUp, Building, ArrowRight, ShieldAlert, Cpu, Award, 
+  CheckCircle, Flame, Star, Activity, AlertTriangle, AlertOctagon, HelpCircle, HardHat, RefreshCw 
+} from '@lucide/vue'
+import { useAuthStore } from '~/stores/auth'
 import MapWidget from '~/components/ui/MapWidget.vue'
 
 const route = useRoute()
 const id = String(route.params.id) // e.g. "mp_1", "mp_2", "mp_3"
 
-// Load shared reports and projects
-const reports = useCookie<any[]>('citizen_reports')
-const projects = useCookie<any[]>('government_projects')
+const auth = useAuthStore()
+const { $api } = useNuxtApp() as any
 
 const selectedFeedTab = ref<'top' | 'recent' | 'unresolved' | 'ignored'>('top')
 const selectedCategory = ref('all')
 
+const CATEGORY_MAP: Record<string, string> = {
+  roads_transport: 'Infrastructure & Roads',
+  water_sanitation: 'Water & Utilities',
+  electricity: 'Electricity & Utilities',
+  healthcare: 'Healthcare & Clinics',
+  education: 'Education & Schools',
+  corruption: 'Accountability & Anti-Corruption',
+  security: 'Security & Safety',
+  flooding: 'Flooding & Drainage',
+  waste_management: 'Public Health & Sanitation',
+  public_infrastructure: 'Public Infrastructure',
+  other: 'Other Concerns'
+}
+
+const getCategoryLabel = (cat: string) => {
+  return CATEGORY_MAP[cat] || cat
+}
+
+const getStatusLabel = (status: string) => {
+  const mapping: Record<string, string> = {
+    pending: 'new',
+    under_review: 'working on it',
+    resolved: 'fixed',
+    rejected: 'rejected',
+    ignored: 'ignored',
+    open: 'new',
+    acknowledged: 'working on it',
+    budgeted: 'budgeted',
+    in_progress: 'in progress'
+  }
+  return mapping[status] || status
+}
+
+// Fetch dashboard telemetry
+const { data: dashboardData } = await useAsyncData(`constituency-dashboard-${id}`, () => {
+  return $api(`/api/dashboard/${id}`).catch((err: any) => {
+    console.error('Error fetching constituency dashboard:', err)
+    return null
+  })
+})
+
+// Fetch MP Profile details
+const { data: mpProfileData } = await useAsyncData(`mp-profile-${id}`, () => {
+  return $api(`/api/mp/${id}`).catch((err: any) => {
+    console.error('Error fetching mp profile:', err)
+    return null
+  })
+})
+
+// Fetch reports list (all posts in this constituency)
+const { data: postsData, refresh: refreshReports } = await useAsyncData(`constituency-posts-${id}`, () => {
+  return $api(`/api/posts`, {
+    query: {
+      constituency: id,
+      limit: 100
+    }
+  }).catch((err: any) => {
+    console.error('Error fetching constituency posts:', err)
+    return { posts: [] }
+  })
+})
+
+// Fetch projects list
+const { data: projectsData } = await useAsyncData(`constituency-projects-${id}`, () => {
+  return $api(`/api/projects`, {
+    query: {
+      constituency: id,
+      limit: 100
+    }
+  }).catch((err: any) => {
+    console.error('Error fetching constituency projects:', err)
+    return { projects: [] }
+  })
+})
+
 const mpData = computed(() => {
-  if (id === 'mp_3') {
-    return {
-      id: 'mp_3',
+  const profile = mpProfileData.value?.profile
+  const stats = dashboardData.value?.reportStats
+  
+  let defaultDetails = {
+    name: 'Hon. Osei Kyei-Mensah',
+    party: 'NPP',
+    constituency: 'Suame District Assembly',
+    region: 'Ashanti Region',
+    contact: 'osei.kyeimensah@parliament.gh | +233 24 342 9876',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
+    bio: 'Dedicated to local industrial growth, road safety, and community transparency.',
+    wardFilters: ['Atonsu', 'Dakodwom'],
+    responseRate: 84.5,
+    resolutionRate: 64,
+    ignoredCount: 3
+  }
+
+  if (id === 'mp_2') {
+    defaultDetails = {
+      name: 'Hon. Samuel Okudzeto Ablakwa',
+      party: 'NDC',
+      constituency: 'North Tongu Assembly',
+      region: 'Volta Region',
+      contact: 'samuel.ablakwa@parwahl.gh | +233 20 898 7654',
+      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
+      bio: 'Representing North Tongu with dedication and focus on water access and education.',
+      wardFilters: ['Nhyiaeso'],
+      responseRate: 78,
+      resolutionRate: 52,
+      ignoredCount: 5
+    }
+  } else if (id === 'mp_3') {
+    defaultDetails = {
       name: 'Hon. Haruna Iddrisu',
       party: 'NDC',
       constituency: 'Tamale South',
       region: 'Northern Region',
       contact: 'haruna.iddrisu@parliament.gh | +233 24 412 3456',
+      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
+      bio: 'Serving the people of Tamale South with emphasis on health facilities and youth development.',
+      wardFilters: ['Santasi'],
       responseRate: 92,
       resolutionRate: 74,
-      ignoredCount: 2,
-      topIssues: ['Health Facilities', 'Youth Employment'],
-      recentAction: 'Commissioned 4 new localized boreholes',
-      wardFilters: ['Santasi'],
-      avatarInitials: 'HI',
-      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80'
+      ignoredCount: 2
     }
-  } else if (id === 'mp_2') {
-    return {
-      id: 'mp_2',
-      name: 'Hon. Samuel Okudzeto Ablakwa',
-      party: 'NDC',
-      constituency: 'North Tongu Assembly',
-      region: 'Volta Region',
-      contact: 'samuel.ablakwa@parliament.gh | +233 20 898 7654',
-      responseRate: 78,
-      resolutionRate: 52,
-      ignoredCount: 5,
-      topIssues: ['Sanitation', 'Education'],
-      recentAction: 'Acknowledged Water Shortage Reports (Pending Action)',
-      wardFilters: ['Nhyiaeso'],
-      avatarInitials: 'SA',
-      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80'
-    }
-  } else {
-    // Default / "mp_1" (Osei Kyei-Mensah)
-    return {
-      id: 'mp_1',
-      name: 'Hon. Osei Kyei-Mensah',
-      party: 'NPP',
-      constituency: 'Suame District Assembly',
-      region: 'Ashanti Region',
-      contact: 'osei.kyeimensah@parliament.gh | +233 24 342 9876',
-      responseRate: 84.5,
-      resolutionRate: 64,
-      ignoredCount: 3,
-      topIssues: ['Road Infrastructure', 'Market Development'],
-      recentAction: 'Allocated 2.4B GHS for Central Drainage Overhaul (Verified)',
-      wardFilters: ['Atonsu', 'Dakodwom'],
-      avatarInitials: 'OK',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80'
-    }
+  }
+
+  const name = profile?.user
+    ? `Hon. ${profile.user.firstName} ${profile.user.lastName}`
+    : defaultDetails.name
+  
+  const party = profile?.party || defaultDetails.party
+  const constituency = profile?.constituency === 'mp_1' ? 'Suame District Assembly' : profile?.constituency === 'mp_2' ? 'North Tongu Assembly' : profile?.constituency === 'mp_3' ? 'Tamale South' : defaultDetails.constituency
+  const contact = (profile?.contactEmail && profile?.contactPhone)
+    ? `${profile.contactEmail} | ${profile.contactPhone}`
+    : defaultDetails.contact
+  const avatarUrl = profile?.profilePhoto?.url || defaultDetails.avatarUrl
+  const bio = profile?.bio || defaultDetails.bio
+
+  return {
+    id,
+    name,
+    party,
+    constituency,
+    region: defaultDetails.region,
+    contact,
+    responseRate: stats?.responseRate ?? defaultDetails.responseRate ?? 0,
+    resolutionRate: stats?.resolutionRate ?? defaultDetails.resolutionRate ?? 0,
+    ignoredCount: stats?.ignoredCount ?? defaultDetails.ignoredCount ?? 0,
+    recentAction: bio,
+    avatarUrl,
+    wardFilters: defaultDetails.wardFilters
   }
 })
 
 // Upvoting inside dynamic feed
-const backIssue = (reportId: string) => {
-  if (reports.value) {
-    const idx = reports.value.findIndex(r => r._id === reportId)
-    if (idx !== -1) {
-      reports.value[idx].upvoteCount++
-      reports.value = [...reports.value]
-    }
+const backIssue = async (reportId: string) => {
+  if (!auth.isAuthenticated) {
+    return navigateTo('/login')
+  }
+  try {
+    await $api(`/api/posts/${reportId}/upvote`, {
+      method: 'POST'
+    })
+    await refreshReports()
+  } catch (err) {
+    console.error('Error upvoting report:', err)
   }
 }
 
+const reports = computed(() => postsData.value?.posts || [])
+const projects = computed(() => projectsData.value?.projects || [])
+
 const filteredReports = computed(() => {
-  if (!reports.value) return []
-  // Filter based on MP's ward filters
-  let list = reports.value.filter(r => mpData.value.wardFilters.includes(r.ward || ''))
+  let list = [...reports.value]
 
   if (selectedCategory.value !== 'all') {
-    list = list.filter(r => r.category === selectedCategory.value)
+    const selectedEnum = Object.keys(CATEGORY_MAP).find(key => CATEGORY_MAP[key] === selectedCategory.value)
+    if (selectedEnum) {
+      list = list.filter(r => r.category === selectedEnum)
+    } else {
+      list = list.filter(r => getCategoryLabel(r.category).toLowerCase().includes(selectedCategory.value.toLowerCase()))
+    }
   }
 
   if (selectedFeedTab.value === 'top') {
-    list.sort((a, b) => b.upvoteCount - a.upvoteCount)
+    list.sort((a, b) => (b.upvotes?.length || 0) - (a.upvotes?.length || 0))
   } else if (selectedFeedTab.value === 'recent') {
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   } else if (selectedFeedTab.value === 'unresolved') {
@@ -104,44 +212,47 @@ const filteredReports = computed(() => {
 })
 
 const filteredProjects = computed(() => {
-  if (!projects.value) return []
-  return projects.value.filter(p => mpData.value.wardFilters.includes(p.ward || ''))
+  return projects.value
 })
 
 const categories = ['all', 'Infrastructure & Roads', 'Water & Utilities', 'Public Health & Sanitation', 'Education & Schools', 'Security & Zoning']
 
 const statusColors = (status: string) => {
-  switch (status) {
-    case 'In Progress': return 'text-blue-500 bg-blue-500/10 border-blue-500/30'
-    case 'Budgeted': return 'text-slate-500 bg-slate-500/10 border-slate-500/30'
-    case 'Completed': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30'
-    case 'Delayed': return 'text-amber-500 bg-amber-500/10 border-amber-500/30'
-    case 'Budget Heavy': return 'text-rose-500 bg-rose-500/10 border-rose-500/30 animate-pulse'
-    case 'Under Review': return 'text-purple-500 bg-purple-500/10 border-purple-500/30'
+  const norm = status?.toLowerCase().replace('_', ' ')
+  switch (norm) {
+    case 'in progress': return 'text-blue-500 bg-blue-500/10 border-blue-500/30'
+    case 'budgeted': return 'text-slate-500 bg-slate-500/10 border-slate-500/30'
+    case 'completed': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30'
+    case 'delayed': return 'text-amber-500 bg-amber-500/10 border-amber-500/30'
+    case 'budget heavy': return 'text-rose-500 bg-rose-500/10 border-rose-500/30 animate-pulse'
+    case 'under review': return 'text-purple-500 bg-purple-500/10 border-purple-500/30'
     default: return 'text-slate-500 bg-slate-100 border-slate-200'
   }
 }
 
 const statusIcons = (status: string) => {
-  switch (status) {
-    case 'In Progress': return Activity
-    case 'Budgeted': return Clock
-    case 'Completed': return CheckCircle
-    case 'Delayed': return AlertTriangle
-    case 'Budget Heavy': return AlertOctagon
-    case 'Under Review': return RefreshCw
+  const norm = status?.toLowerCase().replace('_', ' ')
+  switch (norm) {
+    case 'in progress': return Activity
+    case 'budgeted': return Clock
+    case 'completed': return CheckCircle
+    case 'delayed': return AlertTriangle
+    case 'budget heavy': return AlertOctagon
+    case 'under_review':
+    case 'under review': return RefreshCw
     default: return HardHat
   }
 }
 
 const getProgressPercent = (status: string) => {
-  switch (status) {
-    case 'Completed': return 100
-    case 'In Progress': return 65
-    case 'Under Review': return 35
-    case 'Delayed': return 45
-    case 'Budget Heavy': return 80
-    case 'Budgeted': return 10
+  const norm = status?.toLowerCase().replace('_', ' ')
+  switch (norm) {
+    case 'completed': return 100
+    case 'in progress': return 65
+    case 'under review': return 35
+    case 'delayed': return 45
+    case 'budget heavy': return 80
+    case 'budgeted': return 10
     default: return 0
   }
 }
@@ -241,7 +352,7 @@ const formatDate = (dateString: string) => {
                       <div class="bg-civic-navy px-8 py-5 border-b border-white/5 flex flex-wrap justify-between items-center gap-4">
                           <div>
                               <h2 class="text-xs font-display font-black text-white uppercase tracking-wider">Constituency Complaints Feed</h2>
-                              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Filtering wards: {{ mpData.wardFilters.join(', ') }}</p>
+                              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Filtering wards: {{ mpData.wardFilters?.join(', ') || 'All Wards' }}</p>
                           </div>
                           
                           <!-- sorting selectors -->
@@ -279,7 +390,7 @@ const formatDate = (dateString: string) => {
                               
                               <div class="sm:w-24 shrink-0 flex flex-col items-center justify-center">
                                   <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Backing</span>
-                                  <span class="bg-slate-50 text-slate-700 font-black text-xl px-4 py-2 border border-slate-200/80 rounded w-full text-center">{{ report.upvoteCount }}</span>
+                                  <span class="bg-slate-50 text-slate-700 font-black text-xl px-4 py-2 border border-slate-200/80 rounded w-full text-center">{{ report.upvotes?.length || report.upvoteCount || 0 }}</span>
                                   <button @click="backIssue(report._id)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
                                       Endorse
                                   </button>
@@ -290,19 +401,19 @@ const formatDate = (dateString: string) => {
                                       <div class="flex items-center gap-2 mb-2 flex-wrap">
                                           <span class="text-[8px] px-2 py-0.5 font-black uppercase tracking-widest rounded border"
                                                 :class="{
-                                                    'bg-rose-50 border-rose-200 text-rose-600': report.status === 'open',
-                                                    'bg-amber-50 border-amber-200 text-amber-700': report.status === 'acknowledged',
+                                                    'bg-rose-50 border-rose-200 text-rose-600': report.status === 'open' || report.status === 'pending',
+                                                    'bg-amber-50 border-amber-200 text-amber-700': report.status === 'acknowledged' || report.status === 'under_review',
                                                     'bg-blue-50 border-blue-200 text-blue-700': report.status === 'budgeted' || report.status === 'in_progress',
-                                                    'bg-slate-50 border-slate-200 text-slate-600': report.status === 'ignored',
+                                                    'bg-slate-50 border-slate-200 text-slate-600': report.status === 'ignored' || report.status === 'rejected',
                                                     'bg-emerald-50 border-emerald-200 text-emerald-700': report.status === 'resolved'
-                                                }">{{ report.status.replace('_', ' ') }}</span>
-                                          <span class="text-[8px] font-black uppercase tracking-widest text-civic-navy bg-slate-100 px-2 py-0.5 border border-slate-200 rounded">{{ report.category }}</span>
+                                                }">{{ getStatusLabel(report.status) }}</span>
+                                          <span class="text-[8px] font-black uppercase tracking-widest text-civic-navy bg-slate-100 px-2 py-0.5 border border-slate-200 rounded">{{ getCategoryLabel(report.category) }}</span>
                                       </div>
                                       <NuxtLink :to="`/reports/${report._id}`" class="text-lg font-bold font-display text-civic-navy hover:text-civic-blue transition-colors line-clamp-1">{{ report.title }}</NuxtLink>
-                                      <p class="text-xs text-slate-500 font-semibold line-clamp-2 mt-1">{{ report.body }}</p>
+                                      <p class="text-xs text-slate-500 font-semibold line-clamp-2 mt-1">{{ report.description || report.body }}</p>
                                   </div>
                                   <div class="flex justify-between items-center border-t border-slate-100 pt-3 mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                      <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-slate-300"/> {{ report.location }}</span>
+                                      <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-slate-300"/> {{ report.location?.address || report.location || 'Suame' }}</span>
                                       <NuxtLink :to="`/reports/${report._id}`" class="text-civic-blue font-black uppercase tracking-widest flex items-center gap-1">Details <ArrowRight class="w-3 h-3"/></NuxtLink>
                                   </div>
                               </div>
@@ -322,15 +433,15 @@ const formatDate = (dateString: string) => {
 
                       <div class="divide-y divide-slate-100 space-y-6">
                           <div v-if="filteredProjects.length === 0" class="text-center text-slate-400 font-bold uppercase tracking-widest text-xs py-4">No active initiatives found.</div>
-                          <div v-for="proj in filteredProjects" :key="proj.id" class="pt-6 first:pt-0 space-y-3">
+                          <div v-for="proj in filteredProjects" :key="proj._id" class="pt-6 first:pt-0 space-y-3">
                               <div class="flex items-center justify-between gap-4">
                                   <div class="flex items-center gap-2.5">
                                       <span :class="statusColors(proj.status)" class="flex items-center gap-1 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border rounded">
-                                          <component :is="statusIcons(proj.status)" class="w-3 h-3" /> {{ proj.status }}
+                                          <component :is="statusIcons(proj.status)" class="w-3 h-3" /> {{ getStatusLabel(proj.status) }}
                                       </span>
                                       <h4 class="font-bold text-sm text-civic-navy uppercase tracking-tight">{{ proj.title }}</h4>
                                   </div>
-                                  <span class="text-xs font-black text-slate-400 uppercase tracking-widest">{{ proj.budget }}</span>
+                                  <span class="text-xs font-black text-slate-400 uppercase tracking-widest">{{ proj.budget ? (typeof proj.budget === 'number' ? proj.budget.toLocaleString() + ' GHS' : proj.budget) : 'TBD' }}</span>
                               </div>
                               <p class="text-xs text-slate-500 font-medium leading-relaxed">{{ proj.description }}</p>
                               
@@ -374,3 +485,4 @@ const formatDate = (dateString: string) => {
 
   </div>
 </template>
+

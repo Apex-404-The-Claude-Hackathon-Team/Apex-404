@@ -6,16 +6,22 @@ export default defineNuxtPlugin((nuxtApp) => {
   const $api = $fetch.create({
     baseURL: config.public.apiBase,
     onRequest({ request, options }) {
+      const headers = new Headers(options.headers)
       if (token.value) {
-        options.headers = {
-          ...options.headers,
-          Authorization: `Bearer ${token.value}`,
+        headers.set('Authorization', `Bearer ${token.value}`)
+      }
+      // Forward client cookies to the backend during SSR for cookie-based auth/refresh
+      if (import.meta.server) {
+        const reqHeaders = useRequestHeaders(['cookie'])
+        if (reqHeaders.cookie) {
+          headers.set('cookie', reqHeaders.cookie)
         }
       }
+      options.headers = headers
     },
     onResponseError({ request, response, options }) {
       // Handle the unwrapping logic if necessary, or throw the error directly.
-      throw new Error(response._data?.error || response.statusText);
+      throw new Error(response._data?.message || response._data?.error || response.statusText);
     }
   })
 

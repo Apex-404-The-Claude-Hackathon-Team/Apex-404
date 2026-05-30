@@ -1,61 +1,93 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Award, Briefcase, CheckCircle, Clock, TrendingUp, LineChart, ShieldCheck } from '@lucide/vue'
 
-// Extremely detailed mock data
-const scorecards = ref([
-  {
-    id: 'mp_1',
-    name: 'Hon. Osei Kyei-Mensah',
-    constituency: 'Suame District Assembly',
-    party: 'NPP',
-    score: 84.5,
-    rank: 1,
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-    metrics: {
-      reportsResolved: 342,
-      averageResponseTime: '4.2 Days',
-      townHallsHeld: 12,
-      budgetTransparency: 'High'
+const { $api } = useNuxtApp() as any
+
+// Fetch telemetry stats for all constituencies in parallel
+const { data: remoteData } = await useAsyncData('scorecards-telemetry', async () => {
+  const [db1, db2, db3] = await Promise.all([
+    $api(`/api/dashboard/mp_1`).catch(() => null),
+    $api(`/api/dashboard/mp_2`).catch(() => null),
+    $api(`/api/dashboard/mp_3`).catch(() => null),
+  ])
+  return { mp_1: db1?.reportStats, mp_2: db2?.reportStats, mp_3: db3?.reportStats }
+})
+
+const searchQuery = ref('')
+
+const scorecards = computed(() => {
+  const defaults = [
+    {
+      id: 'mp_1',
+      name: 'Hon. Osei Kyei-Mensah',
+      constituency: 'Suame District Assembly',
+      party: 'NPP',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
+      defaultScore: 84.5,
+      defaultResolved: 342,
+      defaultResponseTime: '4.2 Days',
+      topIssues: ['Road Infrastructure', 'Market Development'],
+      recentAction: 'Allocated 2.4B GHS for Central Drainage Overhaul (Verified)'
     },
-    topIssues: ['Road Infrastructure', 'Market Development'],
-    recentAction: 'Allocated 2.4B GHS for Central Drainage Overhaul (Verified)'
-  },
-  {
-    id: 'mp_2',
-    name: 'Hon. Samuel Okudzeto Ablakwa',
-    constituency: 'North Tongu Assembly',
-    party: 'NDC',
-    score: 72.0,
-    rank: 2,
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
-    metrics: {
-      reportsResolved: 198,
-      averageResponseTime: '8.5 Days',
-      townHallsHeld: 5,
-      budgetTransparency: 'Medium'
+    {
+      id: 'mp_2',
+      name: 'Hon. Samuel Okudzeto Ablakwa',
+      constituency: 'North Tongu Assembly',
+      party: 'NDC',
+      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80',
+      defaultScore: 72.0,
+      defaultResolved: 198,
+      defaultResponseTime: '8.5 Days',
+      topIssues: ['Sanitation', 'Education'],
+      recentAction: 'Acknowledged Water Shortage Reports (Pending Action)'
     },
-    topIssues: ['Sanitation', 'Education'],
-    recentAction: 'Acknowledged Water Shortage Reports (Pending Action)'
-  },
-  {
-    id: 'mp_3',
-    name: 'Hon. Haruna Iddrisu',
-    constituency: 'Tamale South',
-    party: 'NDC',
-    score: 89.2,
-    rank: 3,
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
-    metrics: {
-      reportsResolved: 412,
-      averageResponseTime: '2.8 Days',
-      townHallsHeld: 18,
-      budgetTransparency: 'Very High'
-    },
-    topIssues: ['Health Facilities', 'Youth Employment'],
-    recentAction: 'Commissioned 4 new localized boreholes'
-  }
-].sort((a, b) => b.score - a.score))
+    {
+      id: 'mp_3',
+      name: 'Hon. Haruna Iddrisu',
+      constituency: 'Tamale South',
+      party: 'NDC',
+      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80',
+      defaultScore: 89.2,
+      defaultResolved: 412,
+      defaultResponseTime: '2.8 Days',
+      topIssues: ['Health Facilities', 'Youth Employment'],
+      recentAction: 'Commissioned 4 new localized boreholes'
+    }
+  ]
+
+  const mapped = defaults.map(mp => {
+    const stats = remoteData.value?.[mp.id as 'mp_1' | 'mp_2' | 'mp_3']
+    const score = stats ? (stats.responseRate || mp.defaultScore) : mp.defaultScore
+    const resolved = stats ? (stats.byStatus?.resolved || mp.defaultResolved) : mp.defaultResolved
+    
+    return {
+      id: mp.id,
+      name: mp.name,
+      constituency: mp.constituency,
+      party: mp.party,
+      score,
+      avatarUrl: mp.avatarUrl,
+      metrics: {
+        reportsResolved: resolved,
+        averageResponseTime: mp.defaultResponseTime,
+        townHallsHeld: mp.id === 'mp_1' ? 12 : mp.id === 'mp_2' ? 5 : 18,
+        budgetTransparency: mp.id === 'mp_3' ? 'Very High' : mp.id === 'mp_1' ? 'High' : 'Medium'
+      },
+      topIssues: mp.topIssues,
+      recentAction: mp.recentAction
+    }
+  })
+
+  const filtered = mapped.filter(mp => {
+    if (!searchQuery.value) return true
+    const q = searchQuery.value.toLowerCase()
+    return mp.name.toLowerCase().includes(q) || mp.constituency.toLowerCase().includes(q)
+  })
+
+  // Sort by score in descending order
+  return filtered.sort((a, b) => b.score - a.score)
+})
 
 const performanceLevels = (score: number) => {
     if (score >= 85) return { bg: 'bg-emerald-500', text: 'text-emerald-500', label: 'Excellent' }
@@ -106,7 +138,7 @@ const performanceLevels = (score: number) => {
                   </h2>
                   <div class="flex gap-3 w-full max-w-sm">
                       <div class="glow-blue-border border border-slate-300 bg-white rounded flex-1">
-                          <input placeholder="Search Representative..." class="w-full bg-white px-4 py-2 text-xs font-bold text-civic-navy outline-none" />
+                          <input v-model="searchQuery" placeholder="Search Representative..." class="w-full bg-white px-4 py-2 text-xs font-bold text-civic-navy outline-none" />
                       </div>
                       <button class="bg-[#0f1524] hover:bg-black text-white font-black uppercase tracking-widest text-[9px] px-5 py-2.5 rounded transition-colors cursor-pointer">Filter</button>
                   </div>
@@ -114,40 +146,43 @@ const performanceLevels = (score: number) => {
 
               <!-- Scorecard List -->
               <div class="divide-y divide-slate-100">
+                  <div v-if="scorecards.length === 0" class="p-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                      No representatives found matching your search.
+                  </div>
                   <div v-for="(mp, index) in scorecards" :key="mp.id" class="p-8 flex flex-col xl:flex-row gap-8 hover:bg-[#fcfdfe] transition-all duration-350">
                       
                       <!-- Identifier Block -->
                        <div class="xl:w-1/4 flex flex-col border-b xl:border-b-0 xl:border-r border-slate-200/60 pb-6 xl:pb-0 pr-0 xl:pr-8">
-                           <div class="flex items-center gap-4 mb-4">
-                               <div class="relative shrink-0">
-                                   <img :src="mp.avatarUrl" :alt="mp.name" class="w-12 h-12 rounded-full border border-slate-200 object-cover shadow-sm" />
-                                   <span class="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-slate-900 border border-white text-white flex items-center justify-center font-black text-[9px] shadow-sm">
-                                       {{ index + 1 }}
-                                   </span>
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="relative shrink-0">
+                                    <img :src="mp.avatarUrl" :alt="mp.name" class="w-12 h-12 rounded-full border border-slate-200 object-cover shadow-sm" />
+                                    <span class="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-slate-900 border border-white text-white flex items-center justify-center font-black text-[9px] shadow-sm">
+                                        {{ index + 1 }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <NuxtLink :to="`/constituency/${mp.id}`" class="text-lg font-display font-black text-civic-navy hover:text-civic-blue transition-colors uppercase leading-tight">
+                                        {{ mp.name }}
+                                    </NuxtLink>
+                                    <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1">{{ mp.constituency }}</span>
+                                </div>
+                            </div>
+                          
+                           <div class="mt-auto bg-slate-50 border border-slate-100 p-4 rounded text-left">
+                               <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Overall Rating</span>
+                               <div class="flex items-end gap-1 leading-none">
+                                   <span class="text-3xl font-display font-black tracking-tighter" :class="performanceLevels(mp.score).text">{{ mp.score }}%</span>
+                                   <span class="text-[10px] font-bold text-slate-400 mb-1">/ 100</span>
                                </div>
-                               <div>
-                                   <NuxtLink :to="`/constituency/${mp.id}`" class="text-lg font-display font-black text-civic-navy hover:text-civic-blue transition-colors uppercase leading-tight">
-                                       {{ mp.name }}
-                                   </NuxtLink>
-                                   <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1">{{ mp.constituency }}</span>
+                               <div class="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden border border-slate-350">
+                                   <div class="h-full rounded-full" :class="performanceLevels(mp.score).bg" :style="`width: ${mp.score}%`"></div>
                                </div>
                            </div>
-                          
-                          <div class="mt-auto bg-slate-50 border border-slate-100 p-4 rounded text-left">
-                              <span class="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Overall Rating</span>
-                              <div class="flex items-end gap-1 leading-none">
-                                  <span class="text-3xl font-display font-black tracking-tighter" :class="performanceLevels(mp.score).text">{{ mp.score }}</span>
-                                  <span class="text-[10px] font-bold text-slate-400 mb-1">/ 100</span>
-                              </div>
-                              <div class="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden border border-slate-350">
-                                  <div class="h-full rounded-full" :class="performanceLevels(mp.score).bg" :style="`width: ${mp.score}%`"></div>
-                              </div>
-                          </div>
 
-                          <NuxtLink :to="`/constituency/${mp.id}`" class="mt-4 text-[9px] font-black text-civic-blue hover:text-civic-navy uppercase tracking-widest flex items-center gap-1 transition-colors">
-                              Go to Dashboard &rarr;
-                          </NuxtLink>
-                      </div>
+                           <NuxtLink :to="`/constituency/${mp.id}`" class="mt-4 text-[9px] font-black text-civic-blue hover:text-civic-navy uppercase tracking-widest flex items-center gap-1 transition-colors">
+                               Go to Dashboard &rarr;
+                           </NuxtLink>
+                       </div>
 
                       <!-- Metrics Grid -->
                       <div class="xl:w-2/4 grid grid-cols-2 md:grid-cols-4 gap-4 pb-6 xl:pb-0 xl:border-r border-slate-200/60 pr-0 xl:pr-8 text-left">

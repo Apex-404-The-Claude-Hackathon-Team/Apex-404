@@ -50,7 +50,7 @@ router.patch('/:id',
 
 router.patch('/:id/status',
   protect,
-  authorize('admin', 'super_admin', 'moderator'),
+  authorize('mp', 'admin', 'super_admin', 'moderator'),
   statusRules,
   updateStatus
 );

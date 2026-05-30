@@ -6,10 +6,7 @@ import { FileText, Users, AlertTriangle, LayoutDashboard, BrainCircuit, Activity
 definePageMeta({ middleware: 'mp' })
 
 const auth = useAuthStore()
-
-// Read stateful shared cookies
-const reports = useCookie<any[]>('citizen_reports')
-const projects = useCookie<any[]>('government_projects')
+const { $api } = useNuxtApp() as any
 
 const selectedMenu = ref<'overview' | 'respond' | 'projects' | 'ai-briefs'>('overview')
 const activeBriefTab = ref<'clusters' | 'hotspots' | 'sentiment'>('clusters')
@@ -17,22 +14,57 @@ const activeBriefTab = ref<'clusters' | 'hotspots' | 'sentiment'>('clusters')
 // Form States
 const targetReportId = ref('')
 const mpResponseText = ref('')
-const mpResponseStatus = ref('acknowledged')
+const mpResponseStatus = ref('under_review')
 const submittingResponse = ref(false)
 
-const targetProjectId = ref<number | ''>('')
-const projectNewStatus = ref('')
+const targetProjectId = ref('')
+const projectNewStatus = ref('in_progress')
 const projectNewDesc = ref('')
 const submittingProject = ref(false)
 
 // Message Banner
 const notificationMsg = ref('')
 
+const constituencyId = computed(() => auth.user?.constituency || 'mp_1')
+
+// Fetch constituency posts
+const { data: postsData, refresh: refreshReports } = await useAsyncData<any>('mp-reports', () => {
+  return $api('/api/posts', {
+    query: {
+      constituency: constituencyId.value,
+      limit: 100
+    }
+  }).catch((err: any) => {
+    console.error('Error fetching MP reports:', err)
+    return { posts: [] }
+  })
+}, {
+  watch: [constituencyId]
+})
+
+// Fetch constituency projects
+const { data: projectsData, refresh: refreshProjects } = await useAsyncData<any>('mp-projects', () => {
+  return $api('/api/projects', {
+    query: {
+      constituency: constituencyId.value,
+      limit: 100
+    }
+  }).catch((err: any) => {
+    console.error('Error fetching MP projects:', err)
+    return { projects: [] }
+  })
+}, {
+  watch: [constituencyId]
+})
+
+const reports = computed(() => postsData.value?.posts || [])
+const projects = computed(() => projectsData.value?.projects || [])
+
 // Stat Computations
 const stats = computed(() => {
-  const unresolved = reports.value ? reports.value.filter(r => r.status !== 'resolved').length : 0
-  const ignored = reports.value ? reports.value.filter(r => r.status === 'ignored').length : 0
-  const resolved = reports.value ? reports.value.filter(r => r.status === 'resolved').length : 0
+  const unresolved = reports.value.filter((r: any) => r.status !== 'resolved').length
+  const ignored = reports.value.filter((r: any) => r.status === 'ignored').length
+  const resolved = reports.value.filter((r: any) => r.status === 'resolved').length
   
   return [
     { title: 'Active Incidents', value: String(unresolved), icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/30' },
@@ -42,68 +74,73 @@ const stats = computed(() => {
   ]
 })
 
-const recentBriefs = [
-  { id: 1, title: 'Synthesized Report: Liberation Road Flooding & Drainage', date: 'Oct 23, 2026', severity: 'CRITICAL', sources: 42 },
-  { id: 2, title: 'Constituency Health Sector Overcrowding Analysis', date: 'Oct 20, 2026', severity: 'HIGH', sources: 18 },
-  { id: 3, title: 'Public Education Zoning Deficiencies', date: 'Oct 15, 2026', severity: 'MODERATE', sources: 9 }
-]
+const recentBriefs = ref<any[]>([])
 
-const submitMPResponse = () => {
+const submitMPResponse = async () => {
   if (!targetReportId.value || !mpResponseText.value) return
   
   submittingResponse.value = true
-  
-  setTimeout(() => {
-    const idx = reports.value.findIndex(r => r._id === targetReportId.value)
-    if (idx !== -1) {
-      if (!reports.value[idx].responses) {
-        reports.value[idx].responses = []
+  try {
+    await $api(`/api/posts/${targetReportId.value}/status`, {
+      method: 'PATCH',
+      body: {
+        status: mpResponseStatus.value,
+        officialResponse: mpResponseText.value
       }
-      
-      reports.value[idx].responses.push({
-        authorRole: 'MP Official Response',
-        authorName: auth.user?.name || 'Hon. John Doe',
-        body: mpResponseText.value,
-        date: new Date().toISOString()
-      })
-      
-      reports.value[idx].status = mpResponseStatus.value
-      reports.value = [...reports.value]
-      
-      notificationMsg.value = `Response successfully posted. Citizen report status updated to "${mpResponseStatus.value}".`
-      mpResponseText.value = ''
-      targetReportId.value = ''
-      
-      setTimeout(() => { notificationMsg.value = '' }, 4000)
-    }
+    })
+    
+    notificationMsg.value = `Response successfully posted. Citizen report status updated to "${mpResponseStatus.value}".`
+    mpResponseText.value = ''
+    targetReportId.value = ''
+    
+    await refreshReports()
+    setTimeout(() => { notificationMsg.value = '' }, 4000)
+  } catch (err: any) {
+    console.error('Error posting official response:', err)
+    notificationMsg.value = `Error posting response: ${err.data?.message || err.message}`
+    setTimeout(() => { notificationMsg.value = '' }, 5000)
+  } finally {
     submittingResponse.value = false
-  }, 1000)
+  }
 }
 
-const submitProjectUpdate = () => {
+const submitProjectUpdate = async () => {
   if (!targetProjectId.value || !projectNewStatus.value) return
   
   submittingProject.value = true
-  
-  setTimeout(() => {
-    const idx = projects.value.findIndex(p => p.id === Number(targetProjectId.value))
-    if (idx !== -1) {
-      projects.value[idx].status = projectNewStatus.value
-      if (projectNewDesc.value) {
-        projects.value[idx].description = projectNewDesc.value
+  try {
+    // 1. Update status
+    await $api(`/api/projects/${targetProjectId.value}/status`, {
+      method: 'PATCH',
+      body: {
+        status: projectNewStatus.value
       }
-      projects.value[idx].lastUpdate = new Date().toISOString().split('T')[0]
-      projects.value = [...projects.value]
-      
-      notificationMsg.value = `Government Project "${projects.value[idx].title}" status updated to "${projectNewStatus.value}".`
-      targetProjectId.value = ''
-      projectNewStatus.value = ''
-      projectNewDesc.value = ''
-      
-      setTimeout(() => { notificationMsg.value = '' }, 4000)
+    })
+    
+    // 2. Add update description text if provided
+    if (projectNewDesc.value) {
+      await $api(`/api/projects/${targetProjectId.value}/updates`, {
+        method: 'POST',
+        body: {
+          body: projectNewDesc.value
+        }
+      })
     }
+    
+    notificationMsg.value = `Government Project status updated successfully.`
+    targetProjectId.value = ''
+    projectNewStatus.value = 'in_progress'
+    projectNewDesc.value = ''
+    
+    await refreshProjects()
+    setTimeout(() => { notificationMsg.value = '' }, 4000)
+  } catch (err: any) {
+    console.error('Error updating project:', err)
+    notificationMsg.value = `Error updating project: ${err.data?.message || err.message}`
+    setTimeout(() => { notificationMsg.value = '' }, 5000)
+  } finally {
     submittingProject.value = false
-  }, 1000)
+  }
 }
 
 const formatDate = (dateString: string) => {
@@ -176,7 +213,7 @@ const formatDate = (dateString: string) => {
           <header class="h-[85px] bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
              <div>
                  <h1 class="text-xl font-display font-black text-slate-800 uppercase tracking-wider">Office Telemetry Node</h1>
-                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Accra Central Constituency</p>
+                 <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{{ auth.user?.constituency === 'mp_1' ? 'Suame District Assembly' : auth.user?.constituency === 'mp_2' ? 'North Tongu Assembly' : auth.user?.constituency === 'mp_3' ? 'Tamale South' : 'Accra Central Constituency' }}</p>
              </div>
              <div>
                  <span class="text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-200 font-black px-3 py-1.5 rounded uppercase tracking-widest shadow-sm">
@@ -217,7 +254,7 @@ const formatDate = (dateString: string) => {
                               <h2 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                                   <BrainCircuit class="w-4.5 h-4.5 text-civic-blue animate-pulse" /> AI Brief Aggregation
                               </h2>
-                              <button @click="selectedMenu = 'ai-briefs'" class="text-[9px] font-black text-civic-blue uppercase tracking-widest hover:text-slate-850 transition-colors cursor-pointer">
+                              <button @click="selectedMenu = 'ai-briefs'" class="text-[9px] font-black text-civic-blue uppercase tracking-widest hover:text-slate-855 transition-colors cursor-pointer">
                                   Configure briefs
                               </button>
                           </div>
@@ -227,12 +264,15 @@ const formatDate = (dateString: string) => {
                                   <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">Threat Severity</span>
                               </div>
                               <div class="divide-y divide-slate-100">
-                                  <div v-for="brief in recentBriefs" :key="brief.id" class="p-6 hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-4">
+                                  <div v-if="recentBriefs.length === 0" class="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+                                      No AI briefs compiled yet.
+                                  </div>
+                                  <div v-else v-for="brief in recentBriefs" :key="brief.id" class="p-6 hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-4">
                                       <div class="space-y-1.5">
                                           <div class="flex items-center gap-3">
                                               <span class="text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest" :class="{
                                                   'bg-rose-55 text-rose-600 border border-rose-200': brief.severity === 'CRITICAL',
-                                                  'bg-amber-50 text-amber-600 border border-amber-200': brief.severity === 'HIGH',
+                                                  'bg-amber-55 text-amber-600 border border-amber-200': brief.severity === 'HIGH',
                                                   'bg-blue-50 text-blue-600 border border-blue-200': brief.severity === 'MODERATE'
                                               }">{{ brief.severity }}</span>
                                               <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">{{ brief.date }}</span>
@@ -250,7 +290,7 @@ const formatDate = (dateString: string) => {
                           </div>
                       </div>
 
-                      <!-- Quick Tasks -->
+                      <!-- Quick Operations -->
                       <div class="space-y-5">
                           <h2 class="text-xs font-display font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                               <Filter class="w-4.5 h-4.5 text-slate-500" /> Quick Operations
@@ -259,7 +299,7 @@ const formatDate = (dateString: string) => {
                           <div class="bg-white rounded border border-slate-200 shadow-civic p-6 space-y-6">
                               <div class="space-y-3 text-left">
                                   <h3 class="text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 pb-2">Pending Citizen Reports</h3>
-                                  <p class="text-xs font-semibold text-slate-500 leading-normal">You have {{ reports ? reports.filter(r => r.status === 'open').length : 0 }} unacknowledged reports in your district.</p>
+                                  <p class="text-xs font-semibold text-slate-500 leading-normal">You have {{ reports.filter((r: any) => r.status === 'pending' || r.status === 'open').length }} unacknowledged reports in your district.</p>
                                   <button @click="selectedMenu = 'respond'" class="w-full bg-civic-blue hover:bg-civic-blue-hover text-white font-black uppercase tracking-widest text-[9px] py-3 rounded transition-colors cursor-pointer border-none">
                                       Post Response Statement
                                   </button>
@@ -293,8 +333,8 @@ const formatDate = (dateString: string) => {
                               <div class="glow-blue-border border border-slate-350 bg-slate-50 rounded transition-all">
                                   <select v-model="targetReportId" required class="w-full bg-slate-50 text-slate-800 px-4 py-3.5 font-bold text-xs outline-none appearance-none cursor-pointer border-none">
                                       <option value="" disabled selected>Select report to respond to...</option>
-                                      <option v-for="r in reports ? reports.filter(r => r.status !== 'resolved') : []" :key="r._id" :value="r._id">
-                                          [{{ r.status.toUpperCase() }}] {{ r.title }} (Endorsements: {{ r.upvoteCount }})
+                                      <option v-for="r in reports.filter((r: any) => r.status !== 'resolved')" :key="r._id" :value="r._id">
+                                          [{{ r.status.toUpperCase() }}] {{ r.title }} (Endorsements: {{ r.upvotes?.length || r.upvoteCount || 0 }})
                                       </option>
                                   </select>
                               </div>
@@ -305,10 +345,10 @@ const formatDate = (dateString: string) => {
                                   <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Update Issue Status <span class="text-rose-500">*</span></label>
                                   <div class="glow-blue-border border border-slate-355 bg-slate-50 rounded transition-all">
                                       <select v-model="mpResponseStatus" required class="w-full bg-slate-50 text-slate-800 px-4 py-3.5 font-bold text-xs outline-none appearance-none cursor-pointer border-none">
-                                          <option value="acknowledged">Acknowledged (Reviewing details)</option>
-                                          <option value="budgeted">In Progress (Budget allocated)</option>
+                                          <option value="under_review">Under Review (Acknowledged &amp; Working on it)</option>
                                           <option value="resolved">Resolved (Fix implemented on-ground)</option>
                                           <option value="ignored">Ignored (Decline further intervention)</option>
+                                          <option value="rejected">Rejected</option>
                                       </select>
                                   </div>
                               </div>
@@ -337,7 +377,7 @@ const formatDate = (dateString: string) => {
                       <h2 class="text-lg font-display font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                           <HardHat class="w-5 h-5 text-civic-gold animate-pulse" /> Update Government Project Tracker
                       </h2>
-                      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Publish updates to government commitments in Accra Central constituency.</p>
+                      <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Publish updates to government commitments in your constituency.</p>
                   </div>
 
                   <div class="bg-white border border-slate-200 rounded p-8 shadow-civic">
@@ -347,8 +387,8 @@ const formatDate = (dateString: string) => {
                               <div class="glow-blue-border border border-slate-350 bg-slate-50 rounded transition-all">
                                   <select v-model="targetProjectId" required class="w-full bg-slate-50 text-slate-800 px-4 py-3.5 font-bold text-xs outline-none appearance-none cursor-pointer border-none">
                                       <option value="" disabled selected>Select project to update...</option>
-                                      <option v-for="p in projects" :key="p.id" :value="p.id">
-                                          [{{ p.status.toUpperCase() }}] {{ p.title }} ({{ p.budget }})
+                                      <option v-for="p in projects" :key="p._id" :value="p._id">
+                                          [{{ p.status.toUpperCase() }}] {{ p.title }} ({{ p.budget ? p.budget.toLocaleString() + ' GHS' : 'TBD' }})
                                       </option>
                                   </select>
                               </div>
@@ -359,12 +399,12 @@ const formatDate = (dateString: string) => {
                                   <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">New Project Status <span class="text-rose-500">*</span></label>
                                   <div class="glow-blue-border border border-slate-355 bg-slate-50 rounded transition-all">
                                       <select v-model="projectNewStatus" required class="w-full bg-slate-50 text-slate-800 px-4 py-3.5 font-bold text-xs outline-none appearance-none cursor-pointer border-none">
-                                          <option>Budgeted</option>
-                                          <option>In Progress</option>
-                                          <option>Completed</option>
-                                          <option>Delayed</option>
-                                          <option>Budget Heavy</option>
-                                          <option>Under Review</option>
+                                          <option value="budgeted">Budgeted</option>
+                                          <option value="in_progress">In Progress</option>
+                                          <option value="completed">Completed</option>
+                                          <option value="delayed">Delayed</option>
+                                          <option value="budget_heavy">Budget Heavy</option>
+                                          <option value="under_review">Under Review</option>
                                       </select>
                                   </div>
                               </div>
@@ -373,7 +413,7 @@ const formatDate = (dateString: string) => {
                           <div>
                               <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Update Project Progress Description (Optional)</label>
                               <div class="glow-blue-border border border-slate-350 bg-slate-50 rounded transition-all">
-                                  <textarea v-model="projectNewDesc" rows="4" class="w-full bg-slate-50 text-slate-800 px-4 py-3 text-xs outline-none resize-none leading-relaxed border-none" placeholder="Leave empty to keep existing description. Provide details regarding current phase..."></textarea>
+                                  <textarea v-model="projectNewDesc" rows="4" class="w-full bg-slate-50 text-slate-800 px-4 py-3 text-xs outline-none resize-none leading-relaxed border-none" placeholder="Explain details regarding the current project phase or updates..."></textarea>
                               </div>
                           </div>
 
@@ -468,7 +508,7 @@ const formatDate = (dateString: string) => {
                               <p class="text-[8px] font-black text-civic-blue uppercase tracking-widest mt-1">Utilities deficit</p>
                           </div>
                           <div class="border border-slate-200 p-6 rounded bg-slate-50 text-center shadow-sm relative overflow-hidden">
-                              <div class="absolute top-0 left-0 right-0 h-[2px] bg-slate-450"></div>
+                              <div class="absolute top-0 left-0 right-0 h-[2px] bg-slate-400"></div>
                               <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Santasi Ward</span>
                               <h4 class="text-3xl font-display font-black text-slate-800 mt-2">14%</h4>
                               <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Sanitation issues</p>

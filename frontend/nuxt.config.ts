@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 
+declare var process: { env: Record<string, string | undefined> };
 
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",

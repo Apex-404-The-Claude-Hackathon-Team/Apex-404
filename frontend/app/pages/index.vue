@@ -5,26 +5,68 @@ import { useAuthStore } from '~/stores/auth'
 import MapWidget from '~/components/ui/MapWidget.vue'
 
 const auth = useAuthStore()
+const { $api } = useNuxtApp() as any
+
 const sortBy = ref<'top' | 'recent' | 'unresolved' | 'ignored'>('top')
 const selectedCategory = ref<string>('all')
 
-const defaultReports = [
-  { _id: '1', title: 'Severe Flooding Risk on Liberation Road', body: 'The primary drainage system near the central market has completely collapsed. With the rainy season approaching, over 50 shops are at risk of severe flooding. Previous temporary fixes by the assembly have washed away. Citizens report water levels rising in under 15 minutes of light rain.', category: 'Infrastructure & Roads', status: 'open', upvoteCount: 1450, createdAt: new Date().toISOString(), location: 'Liberation Road North', author: 'Kwame A.', ward: 'Atonsu' },
-  { _id: '2', title: 'Unreliable Electricity to District Clinic', body: 'The power fluctuations in the past 48 hours have caused damage to the only operating cold-storage unit at the clinic. Vaccines are at risk of spoiling if an emergency generator is not provided immediately.', category: 'Water & Utilities', status: 'budgeted', upvoteCount: 980, createdAt: new Date(Date.now() - 86400000).toISOString(), location: 'District Polyclinic', author: 'Dr. Mensah', ward: 'Nhyiaeso' },
-  { _id: '3', title: 'Uncollected Refuse at Transport Hub', body: 'Waste collection vehicles have failed to visit the main transport terminal for three weeks. The buildup is causing a severe health hazard to both commuters and local vendors.', category: 'Public Health & Sanitation', status: 'acknowledged', upvoteCount: 765, createdAt: new Date(Date.now() - 172800000).toISOString(), location: 'Main Lorry Station', author: 'Akosua B.', ward: 'Santasi' },
-  { _id: '4', title: 'Deteriorating School Walkway and Open Potholes', body: 'The primary walking route for school children near Nhyiaeso STEM school has several deep open potholes. Swerving cars regularly brush past school children.', category: 'Infrastructure & Roads', status: 'ignored', upvoteCount: 520, createdAt: new Date(Date.now() - 604800000).toISOString(), location: 'Nhyiaeso School Road', author: 'Ama K.', ward: 'Nhyiaeso' }
-]
+const CATEGORY_MAP: Record<string, string> = {
+  roads_transport: 'Infrastructure & Roads',
+  water_sanitation: 'Water & Utilities',
+  electricity: 'Electricity & Utilities',
+  healthcare: 'Healthcare & Clinics',
+  education: 'Education & Schools',
+  corruption: 'Accountability & Anti-Corruption',
+  security: 'Security & Safety',
+  flooding: 'Flooding & Drainage',
+  waste_management: 'Public Health & Sanitation',
+  public_infrastructure: 'Public Infrastructure',
+  other: 'Other Concerns'
+}
 
-const reports = useCookie<any[]>('citizen_reports', { default: () => defaultReports })
+const getCategoryLabel = (cat: string) => {
+  return CATEGORY_MAP[cat] || cat
+}
 
+const getStatusLabel = (status: string) => {
+  const mapping: Record<string, string> = {
+    pending: 'new',
+    under_review: 'working on it',
+    resolved: 'fixed',
+    rejected: 'rejected',
+    ignored: 'ignored',
+    open: 'new',
+    acknowledged: 'working on it',
+    budgeted: 'budgeted',
+    in_progress: 'in progress'
+  }
+  return mapping[status] || status
+}
+
+// Fetch posts from backend
+const { data: postsData, refresh: refreshReports } = await useAsyncData<any>('reports', () => {
+  return $api('/api/posts', {
+    query: {
+      limit: 100
+    }
+  })
+})
+
+const reports = computed(() => postsData.value?.posts || [])
 const categories = ['all', 'Infrastructure & Roads', 'Water & Utilities', 'Public Health & Sanitation', 'Education & Schools', 'Security & Zoning']
 
 // Stateful Upvoting
-const backIssue = (reportId: string) => {
-  const index = reports.value.findIndex(r => r._id === reportId)
-  if (index !== -1) {
-    reports.value[index].upvoteCount++
-    reports.value = [...reports.value]
+const backIssue = async (reportId: string) => {
+  if (!auth.isAuthenticated) {
+    return navigateTo('/login')
+  }
+  try {
+    await $api(`/api/posts/${reportId}/upvote`, {
+      method: 'POST'
+    })
+    await refreshReports()
+  } catch (err) {
+    console.error('Error upvoting report:', err)
   }
 }
 
@@ -33,11 +75,17 @@ const filteredReports = computed(() => {
   let list = [...reports.value]
 
   if (selectedCategory.value !== 'all') {
-    list = list.filter(r => r.category === selectedCategory.value)
+    const selectedEnum = Object.keys(CATEGORY_MAP).find(key => CATEGORY_MAP[key] === selectedCategory.value)
+    if (selectedEnum) {
+      list = list.filter(r => r.category === selectedEnum)
+    } else {
+      // Fallback matching logic for partial strings
+      list = list.filter(r => getCategoryLabel(r.category).toLowerCase().includes(selectedCategory.value.toLowerCase()))
+    }
   }
 
   if (sortBy.value === 'top') {
-    list.sort((a, b) => b.upvoteCount - a.upvoteCount)
+    list.sort((a, b) => (b.upvotes?.length || 0) - (a.upvotes?.length || 0))
   } else if (sortBy.value === 'recent') {
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   } else if (sortBy.value === 'unresolved') {
@@ -49,11 +97,7 @@ const filteredReports = computed(() => {
   return list
 })
 
-const recentNews = [
-  { id: 1, title: 'Water Supply Restoration Schedule Announced', date: 'Oct 24, 2026', tag: 'Notice' },
-  { id: 2, title: 'MP Holds Town Hall on Tech Hub Project', date: 'Oct 22, 2026', tag: 'Event' },
-  { id: 3, title: 'Central Drainage Contract Awarded', date: 'Oct 20, 2026', tag: 'News' }
-]
+const recentNews = ref<any[]>([])
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -144,11 +188,11 @@ const formatDate = (dateString: string) => {
             </p>
             <div class="grid grid-cols-2 gap-4">
               <div class="bg-slate-50 p-3 rounded border border-slate-100 text-center shadow-inner">
-                <span class="block text-xl font-black text-civic-navy leading-none">{{ reports.filter(r => r.status !== 'resolved').length }}</span>
+                <span class="block text-xl font-black text-civic-navy leading-none">{{ reports.filter((r: any) => r.status !== 'resolved').length }}</span>
                 <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1 block">Unresolved Problems</span>
               </div>
               <div class="bg-slate-50 p-3 rounded border border-slate-100 text-center shadow-inner">
-                <span class="block text-xl font-black text-rose-600 leading-none">{{ reports.filter(r => r.status === 'ignored').length }}</span>
+                <span class="block text-xl font-black text-rose-600 leading-none">{{ reports.filter((r: any) => r.status === 'ignored').length }}</span>
                 <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1 block">No Action Taken</span>
               </div>
             </div>
@@ -162,7 +206,10 @@ const formatDate = (dateString: string) => {
               </h3>
             </div>
             <div class="p-0 divide-y divide-slate-100">
-              <a href="#" v-for="news in recentNews" :key="news.id" class="block p-4.5 hover:bg-slate-50 transition-colors">
+              <div v-if="recentNews.length === 0" class="p-8 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+                No public notices published.
+              </div>
+              <a v-else href="#" v-for="news in recentNews" :key="news.id" class="block p-4.5 hover:bg-slate-50 transition-colors">
                 <span class="inline-block px-2 py-0.5 rounded bg-slate-100 text-civic-navy text-[8px] font-black uppercase tracking-widest mb-1.5">{{ news.tag }}</span>
                 <h4 class="text-xs font-bold text-civic-navy leading-snug mb-1">{{ news.title }}</h4>
                 <span class="text-[9px] font-black text-slate-400 tracking-widest uppercase">{{ news.date }}</span>
@@ -225,7 +272,9 @@ const formatDate = (dateString: string) => {
             <!-- Supporters Controller -->
             <div class="md:w-28 flex flex-col items-center pb-6 md:pb-0 md:border-r border-slate-200/60 md:pr-8 shrink-0 justify-center">
               <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1.5">Supporters</span>
-              <span class="bg-slate-50 text-slate-800 font-black text-2xl px-5 py-3 rounded border border-slate-200/80 min-w-full text-center mb-3 shadow-inner">{{ report.upvoteCount.toLocaleString() }}</span>
+              <span class="bg-slate-50 text-slate-800 font-black text-2xl px-5 py-3 rounded border border-slate-200/80 min-w-full text-center mb-3 shadow-inner">
+                {{ (report.upvotes?.length || report.upvoteCount || 0).toLocaleString() }}
+              </span>
               <button 
                 @click="backIssue(report._id)"
                 class="w-full bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-2 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm hover:shadow active:scale-95 cursor-pointer"
@@ -240,32 +289,32 @@ const formatDate = (dateString: string) => {
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                   <span class="text-[8px] px-2 py-0.5 font-black uppercase tracking-widest rounded border" 
                         :class="{
-                            'bg-rose-50 border-rose-200 text-rose-600': report.status === 'open',
-                            'bg-amber-50 border-amber-200 text-amber-700': report.status === 'acknowledged',
+                            'bg-rose-50 border-rose-200 text-rose-600': report.status === 'open' || report.status === 'pending',
+                            'bg-amber-50 border-amber-200 text-amber-700': report.status === 'acknowledged' || report.status === 'under_review',
                             'bg-blue-50 border-blue-200 text-blue-700': report.status === 'budgeted' || report.status === 'in_progress',
-                            'bg-slate-50 border-slate-200 text-slate-600': report.status === 'ignored',
+                            'bg-slate-50 border-slate-200 text-slate-600': report.status === 'ignored' || report.status === 'rejected',
                             'bg-emerald-50 border-emerald-200 text-emerald-700': report.status === 'resolved'
                         }">
-                    {{ report.status === 'open' ? 'new' : report.status === 'acknowledged' ? 'working on it' : report.status === 'resolved' ? 'fixed' : report.status.replace('_', ' ') }}
+                    {{ getStatusLabel(report.status) }}
                   </span>
                   <span class="bg-[#0f1524] text-white rounded px-2 py-0.5 text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                    <Building class="w-2.5 h-2.5 text-civic-gold"/> {{ report.category }}
+                    <Building class="w-2.5 h-2.5 text-civic-gold"/> {{ getCategoryLabel(report.category) }}
                   </span>
                   <span class="bg-slate-100 text-slate-500 rounded px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
-                    Ward: {{ report.ward }}
+                    Ward: {{ report.location?.city || report.ward || 'Suame' }}
                   </span>
                 </div>
                 
                 <NuxtLink :to="`/reports/${report._id}`" class="text-xl font-bold font-display text-civic-navy hover:text-civic-blue tracking-tight block mb-2 transition-colors leading-tight">
                   {{ report.title }}
                 </NuxtLink>
-                <p class="text-xs text-slate-500 font-medium leading-relaxed mb-5">{{ report.body }}</p>
+                <p class="text-xs text-slate-500 font-medium leading-relaxed mb-5">{{ report.description || report.body }}</p>
               </div>
               
               <!-- Metadata footer -->
               <div class="flex items-center justify-between border-t border-slate-100 pt-3.5 mt-auto">
                 <div class="flex items-center gap-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                  <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-slate-300"/> {{ report.location }}</span>
+                  <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-slate-300"/> {{ report.location?.address || report.location || 'Suame' }}</span>
                   <span class="hidden sm:flex items-center gap-1.5"><Clock class="w-3.5 h-3.5 text-slate-300"/> {{ formatDate(report.createdAt) }}</span>
                 </div>
                 <NuxtLink :to="`/reports/${report._id}`" class="text-civic-blue hover:text-civic-navy font-black uppercase tracking-widest text-[9px] flex items-center gap-1">

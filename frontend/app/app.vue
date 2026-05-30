@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Landmark } from '@lucide/vue'
+import { useAuthStore } from '~/stores/auth'
 
 const isInitialLoading = ref(true)
+const auth = useAuthStore()
 
-onMounted(() => {
+onMounted(async () => {
+  // Recover user session from cookie/token refresh
+  await auth.fetchUser()
+
   // Premium entry delay to let layout elements settle and hydrate
   setTimeout(() => {
     isInitialLoading.value = false

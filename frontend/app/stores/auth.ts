@@ -10,47 +10,101 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const role = computed(() => user.value?.role || null)
 
-  async function login(credentials: any) {
-    // Simulated mock authentication delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const email = credentials.email || 'citizen@voiceup.gh'
-    const isMP = email.includes('mp')
-    
-    const mockUser = {
-      id: isMP ? 'u_mp' : 'u_citizen',
-      email: email,
-      name: isMP ? 'Hon. John Doe' : email.split('@')[0],
-      role: isMP ? 'mp' : 'citizen',
-      constituencyId: 'c_dummy_1'
+  function saveUserSession(userData: any) {
+    if (!userData) return
+    // Normalize firstName and lastName to name for compatibility across UI layouts
+    const name = userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Citizen'
+    const normalizedUser = {
+      ...userData,
+      name
     }
-    
-    token.value = 'dummy_token_123'
-    user.value = mockUser
-    userCookie.value = mockUser
+    user.value = normalizedUser
+    userCookie.value = normalizedUser
   }
 
-  async function register(userData: any) {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    const mockUser = {
-      id: 'u_citizen_new',
-      email: userData.email,
-      name: userData.fullName || 'New Citizen',
-      role: 'citizen',
-      constituencyId: userData.constituency || 'c_dummy_1'
-    }
-    
-    token.value = 'dummy_token_123'
-    user.value = mockUser
-    userCookie.value = mockUser
-  }
-
-  async function logout() {
+  function clearSession() {
     token.value = null
     user.value = null
     userCookie.value = null
-    await navigateTo('/login')
+  }
+
+  async function fetchUser() {
+    if (!token.value) return
+    const { $api } = useNuxtApp()
+    try {
+      const res = await $api<any>('/api/auth/me')
+      saveUserSession(res.user)
+    } catch (err) {
+      // If fetching fails, try to refresh using the refresh cookie
+      try {
+        await refreshSession()
+      } catch (refreshErr) {
+        clearSession()
+      }
+    }
+  }
+
+  async function refreshSession() {
+    const { $api } = useNuxtApp()
+    try {
+      const res = await $api<any>('/api/auth/refresh', {
+        method: 'POST'
+      })
+      token.value = res.accessToken
+      saveUserSession(res.user)
+    } catch (err) {
+      clearSession()
+      throw err
+    }
+  }
+
+  async function login(credentials: any) {
+    const { $api } = useNuxtApp()
+    const res = await $api<any>('/api/auth/login', {
+      method: 'POST',
+      body: {
+        email: credentials.email,
+        password: credentials.password
+      }
+    })
+    token.value = res.accessToken
+    saveUserSession(res.user)
+  }
+
+  async function register(userData: any) {
+    const { $api } = useNuxtApp()
+    
+    // Split fullName into firstName and lastName (required by backend)
+    const nameParts = (userData.fullName || '').trim().split(/\s+/)
+    const firstName = nameParts[0] || 'Citizen'
+    const lastName = nameParts.slice(1).join(' ') || 'User'
+
+    const res = await $api<any>('/api/auth/register', {
+      method: 'POST',
+      body: {
+        firstName,
+        lastName,
+        email: userData.email,
+        password: userData.password,
+        constituency: userData.constituency
+      }
+    })
+    token.value = res.accessToken
+    saveUserSession(res.user)
+  }
+
+  async function logout() {
+    const { $api } = useNuxtApp()
+    try {
+      if (token.value) {
+        await $api('/api/auth/logout', { method: 'POST' })
+      }
+    } catch (err) {
+      console.error('Failed to log out from backend:', err)
+    } finally {
+      clearSession()
+      await navigateTo('/login')
+    }
   }
 
   return {
@@ -60,6 +114,8 @@ export const useAuthStore = defineStore('auth', () => {
     role,
     login,
     register,
-    logout
+    logout,
+    fetchUser,
+    refreshSession
   }
 })

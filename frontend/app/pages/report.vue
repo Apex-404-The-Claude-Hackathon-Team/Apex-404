@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useAuthStore } from '~/stores/auth'
 import { FileText, Edit3, Mic, MapPin, UploadCloud, AlertTriangle, ShieldCheck, HelpCircle, ArrowLeft, Cpu } from '@lucide/vue'
 
-
 const auth = useAuthStore()
+const { $api } = useNuxtApp()
+
 const mode = ref<'text' | 'voice'>('voice')
+const errors = ref<string[]>([])
 
 const form = ref({
   title: '',
@@ -42,7 +44,7 @@ const stopRecording = () => {
     form.value.title = "Drainage Leakage at Central Market Lane"
     form.value.category = "Water & Utilities"
     form.value.region = "Ashanti"
-    form.value.constituency = "Nhyiaeso"
+    form.value.constituency = "Suame"
     form.value.ward = "Atonsu"
     form.value.street = "Central Market Lane, next to Kejetia entrance"
     form.value.body = "Voice Transcription (Translated from Twi): The primary pipeline has developed a major leakage. Clean water is wasting and flooding the street. Vendors are unable to set up their stalls. Immediate action is needed."
@@ -58,33 +60,59 @@ const formatTime = (secs: number) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`
 }
 
+const mapCategoryToEnum = (cat: string) => {
+  const mapping: Record<string, string> = {
+    'Infrastructure & Roads': 'roads_transport',
+    'Water & Utilities': 'water_sanitation',
+    'Public Health & Sanitation': 'waste_management',
+    'Education & Schools': 'education',
+    'Security & Zoning': 'security'
+  }
+  return mapping[cat] || 'other'
+}
+
+const mapConstituencyToId = (constituencyName: string) => {
+  const name = (constituencyName || '').toLowerCase()
+  if (name.includes('suame')) return 'mp_1'
+  if (name.includes('tongu')) return 'mp_2'
+  if (name.includes('tamale')) return 'mp_3'
+  return auth.user?.constituency || 'mp_1'
+}
+
 const handleSubmit = async () => {
+  if (!auth.isAuthenticated) {
+    return navigateTo('/login')
+  }
+  
   submitting.value = true
-  setTimeout(() => {
-    const reportsCookie = useCookie<any[]>('citizen_reports')
-    
-    const newReport = {
-      _id: String(Date.now()),
+  errors.value = []
+  
+  try {
+    const payload = {
       title: form.value.title,
-      body: form.value.body,
-      category: form.value.category,
-      status: 'open',
-      upvoteCount: 1,
-      createdAt: new Date().toISOString(),
-      location: `${form.value.street}, ${form.value.ward}, ${form.value.constituency}`,
-      author: auth.user?.name || 'Anonymous Citizen',
-      ward: form.value.ward
+      description: form.value.body,
+      category: mapCategoryToEnum(form.value.category),
+      constituency: mapConstituencyToId(form.value.constituency),
+      location: JSON.stringify({
+        address: form.value.street,
+        city: form.value.ward,
+        region: form.value.region,
+        country: 'Ghana',
+        coordinates: [-1.6244, 6.6904] // Default Suame center
+      })
     }
+
+    await $api<any>('/api/posts', {
+      method: 'POST',
+      body: payload
+    })
     
-    if (reportsCookie.value) {
-      reportsCookie.value = [newReport, ...reportsCookie.value]
-    } else {
-      reportsCookie.value = [newReport]
-    }
-    
-    submitting.value = false
     success.value = true
-  }, 1200)
+  } catch (err: any) {
+    errors.value = [err.message || 'Failed to submit report. Please try again.']
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -140,6 +168,14 @@ const handleSubmit = async () => {
               <!-- Left Form Area -->
               <div class="flex-1 bg-white rounded-lg shadow-civic border border-slate-200 overflow-hidden">
                   
+                  <!-- Error alert -->
+                  <div v-if="errors.length" class="bg-rose-50 border-b border-rose-200 text-rose-700 px-8 py-4 text-xs font-semibold flex items-start gap-2">
+                      <AlertTriangle class="w-4.5 h-4.5 shrink-0 mt-0.5 text-rose-500" />
+                      <ul class="list-disc pl-4 space-y-0.5">
+                          <li v-for="err in errors" :key="err">{{ err }}</li>
+                      </ul>
+                  </div>
+
                   <!-- Form Tabs (Segment control look) -->
                   <div class="flex bg-slate-50 border-b border-slate-200 p-2 gap-2">
                      <button @click="mode = 'voice'" :class="mode === 'voice' ? 'bg-white text-civic-navy shadow border border-slate-200' : 'text-slate-500 hover:bg-slate-100'" class="flex-1 py-4 flex justify-center items-center gap-2 text-xs font-black uppercase tracking-widest transition-all cursor-pointer rounded">

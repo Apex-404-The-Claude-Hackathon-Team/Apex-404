@@ -7,71 +7,107 @@ import { ArrowLeft, MapPin, Clock, ThumbsUp, ShieldAlert, Flag, CheckCircle, Cpu
 const auth = useAuthStore()
 const route = useRoute()
 const id = route.params.id
+const { $api } = useNuxtApp()
 
-const reports = useCookie<any[]>('citizen_reports')
+const CATEGORY_MAP: Record<string, string> = {
+  roads_transport: 'Infrastructure & Roads',
+  water_sanitation: 'Water & Utilities',
+  electricity: 'Electricity & Utilities',
+  healthcare: 'Healthcare & Clinics',
+  education: 'Education & Schools',
+  corruption: 'Accountability & Anti-Corruption',
+  security: 'Security & Safety',
+  flooding: 'Flooding & Drainage',
+  waste_management: 'Public Health & Sanitation',
+  public_infrastructure: 'Public Infrastructure',
+  other: 'Other Concerns'
+}
 
-const reportIndex = computed(() => {
-  return reports.value ? reports.value.findIndex(r => r._id === id) : -1
+const getCategoryLabel = (cat: string) => {
+  return CATEGORY_MAP[cat] || cat
+}
+
+const getMpName = (constituency: string) => {
+  const mapping: Record<string, string> = {
+    mp_1: 'Hon. Osei Kyei-Mensah',
+    mp_2: 'Hon. Samuel Okudzeto Ablakwa',
+    mp_3: 'Hon. Haruna Iddrisu'
+  }
+  return mapping[constituency] || 'Constituency Office'
+}
+
+// Fetch single report from backend
+const { data: reportData, refresh: refreshReport } = await useAsyncData(`report-${id}`, () => {
+  return $api<any>(`/api/posts/${id}`)
 })
 
 const report = computed(() => {
-  if (reportIndex.value !== -1 && reports.value) {
-    return reports.value[reportIndex.value]
-  }
-  return {
-    _id: id,
-    title: 'Severe Flooding Risk on Liberation Road',
-    body: 'The primary drainage system near the central market has completely collapsed. With the rainy season approaching, over 50 shops are at risk of severe flooding. Previous temporary fixes by the assembly have washed away. We need concrete action, not just sandbags. The water is already beginning to pool after just 15 minutes of light rain.',
-    category: 'Infrastructure & Roads',
-    status: 'acknowledged',
-    upvoteCount: 1450,
-    createdAt: new Date().toISOString(),
-    location: 'Liberation Road North, Atonsu Ward',
-    author: 'Kwame A.',
-    ward: 'Atonsu',
-    responses: [
-      {
-        authorRole: 'MP Office Response',
-        authorName: 'Hon. Osei Kyei-Mensah',
-        body: 'My office has reviewed the attached documentation and sent engineers to the site. The district assembly has been directed to provision emergency concrete piping within the next 48 hours to mitigate the immediate risk.',
-        date: new Date(Date.now() - 3600000).toISOString()
-      }
-    ]
-  }
+  return reportData.value?.post || null
+})
+
+// Fetch comments from backend
+const { data: commentsData, refresh: refreshComments } = await useAsyncData(`comments-${id}`, () => {
+  return $api<any>(`/api/posts/${id}/comments`)
+})
+
+const comments = computed(() => {
+  return commentsData.value?.comments || []
 })
 
 const localUpvotes = ref(0)
-const endorseReport = () => {
-  if (reportIndex.value !== -1 && reports.value) {
-    reports.value[reportIndex.value].upvoteCount++
-    reports.value = [...reports.value]
-  } else {
-    localUpvotes.value++
+const endorseReport = async () => {
+  if (!auth.isAuthenticated) {
+    return navigateTo('/login')
+  }
+  try {
+    await $api(`/api/posts/${id}/upvote`, { method: 'POST' })
+    await refreshReport()
+  } catch (err) {
+    console.error('Error upvoting report:', err)
   }
 }
 
 const displayUpvotes = computed(() => {
-  return (report.value?.upvoteCount || 0) + localUpvotes.value
+  return report.value?.upvotes?.length || report.value?.upvoteCount || 0
 })
-
-const comments = ref([
-  { author: 'Ama Serwaa', date: new Date(Date.now() - 7200000).toISOString(), body: 'This drainage has been blocked for months. Glad to see it finally highlighted here.' },
-  { author: 'Kofi Mensah', date: new Date(Date.now() - 3600000).toISOString(), body: 'If this collapses during the next heavy rain, the market will be closed for weeks. MP please act!' }
-])
 
 const newComment = ref('')
 
-const addComment = () => {
+const addComment = async () => {
+  if (!auth.isAuthenticated) {
+    return navigateTo('/login')
+  }
   if (!newComment.value.trim()) return
-  comments.value.push({
-    author: auth.user?.name || 'Citizen User',
-    date: new Date().toISOString(),
-    body: newComment.value.trim()
-  })
-  newComment.value = ''
+  try {
+    await $api(`/api/posts/${id}/comments`, {
+      method: 'POST',
+      body: {
+        body: newComment.value.trim()
+      }
+    })
+    newComment.value = ''
+    await refreshComments()
+  } catch (err) {
+    console.error('Error adding comment:', err)
+  }
 }
 
+const officialResponses = computed(() => {
+  if (report.value?.officialResponse) {
+    return [
+      {
+        authorRole: 'Official MP Response',
+        authorName: getMpName(report.value.constituency),
+        body: report.value.officialResponse,
+        date: report.value.updatedAt || new Date().toISOString()
+      }
+    ]
+  }
+  return []
+})
+
 const formatDate = (dateString: string) => {
+  if (!dateString) return ''
   return new Date(dateString).toLocaleDateString(undefined, { 
     month: 'long', 
     day: 'numeric', 
@@ -97,9 +133,9 @@ const formatDate = (dateString: string) => {
                 </NuxtLink>
                 
                 <div class="flex flex-wrap items-center gap-3.5 mb-4">
-                    <span class="bg-[#0f1524] text-civic-blue px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest border border-civic-blue/20 shadow-[0_0_8px_rgba(6,182,212,0.15)]">{{ report.category }}</span>
+                    <span class="bg-[#0f1524] text-civic-blue px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest border border-civic-blue/20 shadow-[0_0_8px_rgba(6,182,212,0.15)]">{{ getCategoryLabel(report.category) }}</span>
                     <span class="bg-amber-500/10 border border-amber-500/25 text-civic-gold px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">
-                        <Flag class="w-3 h-3 animate-pulse"/> {{ report.status }}
+                        <Flag class="w-3 h-3 animate-pulse"/> {{ report.status?.replace('_', ' ') }}
                     </span>
                     <span class="text-slate-500 text-xs font-semibold flex items-center gap-1.5">
                         <Clock class="w-3.5 h-3.5 text-slate-500"/> {{ formatDate(report.createdAt) }}
@@ -111,7 +147,7 @@ const formatDate = (dateString: string) => {
                 </h1>
                 
                 <div class="flex items-center gap-2 text-slate-400 text-xs font-bold">
-                    <MapPin class="w-4 h-4 text-civic-blue" /> {{ report.location }}
+                    <MapPin class="w-4 h-4 text-civic-blue" /> {{ report.location?.address || report.location }}
                 </div>
             </div>
         </div>
@@ -127,10 +163,12 @@ const formatDate = (dateString: string) => {
                             <div class="flex items-center justify-between mb-8 pb-5 border-b border-slate-100">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded bg-[#0f1524] text-white flex items-center justify-center font-black border border-white/10 shadow-[0_0_8px_rgba(255,255,255,0.05)]">
-                                        {{ report.author.charAt(0).toUpperCase() }}
+                                        {{ (report.author?.firstName || report.author || 'C').charAt(0).toUpperCase() }}
                                     </div>
                                     <div>
-                                        <p class="text-xs font-black text-civic-navy uppercase tracking-wider">{{ report.author }}</p>
+                                        <p class="text-xs font-black text-civic-navy uppercase tracking-wider">
+                                            {{ report.author?.firstName ? `${report.author.firstName} ${report.author.lastName}` : report.author || 'Citizen User' }}
+                                        </p>
                                         <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Verified Resident</p>
                                     </div>
                                 </div>
@@ -141,7 +179,7 @@ const formatDate = (dateString: string) => {
                             </div>
                             
                             <p class="text-base text-slate-650 font-semibold leading-relaxed mb-8">
-                                {{ report.body }}
+                                {{ report.description || report.body }}
                             </p>
                             
                             <!-- Action Box -->
@@ -158,14 +196,14 @@ const formatDate = (dateString: string) => {
                     </div>
                     
                     <!-- Official responses section -->
-                    <div v-if="report.responses && report.responses.length" class="space-y-6">
+                    <div v-if="officialResponses && officialResponses.length" class="space-y-6">
                         <div class="flex items-center gap-3 pl-2">
                             <CheckCircle class="w-5 h-5 text-emerald-500" />
                             <h2 class="text-xs font-display font-black text-civic-navy uppercase tracking-wider">Official Office Interventions</h2>
                         </div>
                         
                         <div class="space-y-4">
-                            <div v-for="(resp, i) in report.responses" :key="i" class="bg-white rounded-lg shadow-civic border-l-4 border-l-civic-blue p-6 border-y border-y-slate-200 border-r border-r-slate-200">
+                            <div v-for="(resp, i) in officialResponses" :key="i" class="bg-white rounded-lg shadow-civic border-l-4 border-l-civic-blue p-6 border-y border-y-slate-200 border-r border-r-slate-200">
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <p class="text-xs font-black text-civic-navy uppercase tracking-wider leading-snug">{{ resp.authorName }}</p>
@@ -208,12 +246,14 @@ const formatDate = (dateString: string) => {
                         <div class="p-6 divide-y divide-slate-100 space-y-6">
                             <div v-for="(comment, index) in comments" :key="index" class="flex gap-4 pt-4 first:pt-0">
                                 <div class="w-10 h-10 rounded bg-[#0f1524]/5 text-slate-600 flex items-center justify-center font-black border border-slate-200 shrink-0">
-                                    {{ comment.author.charAt(0).toUpperCase() }}
+                                    {{ (comment.author?.firstName || comment.author || 'C').charAt(0).toUpperCase() }}
                                 </div>
                                 <div class="flex-1 bg-slate-50/50 p-4 rounded border border-slate-100 relative">
                                     <div class="flex items-center justify-between mb-2">
-                                        <h4 class="text-[10px] font-black text-[#0f1524] uppercase tracking-wider leading-none">{{ comment.author }}</h4>
-                                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">{{ formatDate(comment.date) }}</span>
+                                        <h4 class="text-[10px] font-black text-[#0f1524] uppercase tracking-wider leading-none">
+                                            {{ comment.author?.firstName ? `${comment.author.firstName} ${comment.author.lastName}` : comment.author || 'Citizen User' }}
+                                        </h4>
+                                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">{{ formatDate(comment.createdAt || comment.date) }}</span>
                                     </div>
                                     <p class="text-xs text-slate-500 font-semibold leading-relaxed">{{ comment.body }}</p>
                                 </div>
