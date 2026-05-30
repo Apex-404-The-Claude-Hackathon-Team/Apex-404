@@ -31,4 +31,11 @@ router.get('/reverse-geocode', coordRules, async (req, res) => {
   });
 });
 
+const constituencies = require('../config/constituencies');
+
+// GET /api/location/constituencies
+router.get('/constituencies', (req, res) => {
+  res.json({ constituencies });
+});
+
 module.exports = router;

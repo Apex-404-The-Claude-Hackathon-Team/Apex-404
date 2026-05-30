@@ -35,11 +35,6 @@ const handleLogin = async () => {
     }
 }
 
-const quickLogin = async (email: string) => {
-    form.value.email = email
-    form.value.password = 'demoPassword123'
-    await handleLogin()
-}
 </script>
 
 <template>
@@ -128,19 +123,6 @@ const quickLogin = async (email: string) => {
                           </button>
                       </div>
                   </form>
-
-                  <!-- Demo Accounts Quick Bypass -->
-                  <div class="pt-3 border-t border-slate-100 flex flex-col gap-2">
-                      <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Demo Quick Login Bypasses</span>
-                      <div class="grid grid-cols-2 gap-2">
-                          <button @click="quickLogin('citizen@voiceup.gh')" type="button" class="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-[9px] font-bold py-2 rounded uppercase tracking-wider transition-colors cursor-pointer text-center">
-                              Citizen Account
-                          </button>
-                          <button @click="quickLogin('mp@voiceup.gh')" type="button" class="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-[9px] font-bold py-2 rounded uppercase tracking-wider transition-colors cursor-pointer text-center">
-                              MP Admin Console
-                          </button>
-                      </div>
-                  </div>
 
                   <!-- Footer -->
                   <div class="text-center pt-2">

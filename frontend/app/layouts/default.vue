@@ -8,6 +8,37 @@ const auth = useAuthStore()
 const route = useRoute()
 const mobileMenuOpen = ref(false)
 
+const { $api } = useNuxtApp() as any
+
+// Fetch live constituencies on setup
+const { data: constituenciesData } = await useAsyncData<any>('layout-constituencies', () => {
+    return $api('/api/location/constituencies')
+})
+
+const fallbackMps = [
+    { id: 'mp_1', name: 'Suame', mpName: 'Osei Kyei-Mensah' },
+    { id: 'mp_2', name: 'North Tongu', mpName: 'Samuel Okudzeto Ablakwa' },
+    { id: 'mp_3', name: 'Tamale South', mpName: 'Haruna Iddrisu' }
+]
+
+const constituenciesList = computed(() => {
+    return constituenciesData.value?.constituencies && constituenciesData.value.constituencies.length > 0
+        ? constituenciesData.value.constituencies
+        : fallbackMps
+})
+
+const getShortLabel = (item: any) => {
+    const mpName = item.mpName || ''
+    const parts = mpName.split(' ')
+    let shortName = 'Elected MP'
+    if (parts.length > 0 && parts[0]) {
+        const lastName = parts[parts.length - 1]
+        const firstInitials = parts.slice(0, parts.length - 1).map((p: string) => p[0] + '.').join('')
+        shortName = firstInitials ? `${firstInitials} ${lastName}` : lastName
+    }
+    return `${item.name} (${shortName})`
+}
+
 const handleLogout = async () => {
     await auth.logout()
 }
@@ -66,11 +97,11 @@ const currentConstituency = computed(() => {
                     <div class="flex items-center gap-2 text-slate-400">
                         <MapPin class="w-3.5 h-3.5 text-civic-blue" />
                         <span class="font-bold">Constituency Node:</span>
-                        <select :value="currentConstituency" @change="navigateToConstituency($event)" class="bg-transparent text-white font-bold outline-none border-none cursor-pointer text-xs focus:ring-0">
+                        <select :value="currentConstituency" @change="navigateToConstituency($event)" class="bg-transparent text-white font-bold outline-none border-none cursor-pointer text-xs focus:ring-0 max-w-[200px] overflow-hidden truncate">
                             <option value="" disabled class="bg-[#080c14] text-slate-400">Select...</option>
-                            <option value="mp_1" class="bg-[#080c14] text-white">Suame (Osei K-M)</option>
-                            <option value="mp_2" class="bg-[#080c14] text-white">North Tongu (Samuel O.A)</option>
-                            <option value="mp_3" class="bg-[#080c14] text-white">Tamale South (Haruna I)</option>
+                            <option v-for="item in constituenciesList" :key="item.id" :value="item.id" class="bg-[#080c14] text-white">
+                                {{ getShortLabel(item) }}
+                            </option>
                         </select>
                     </div>
                     <span class="hidden md:flex items-center gap-2 hover:text-white transition-colors cursor-pointer"><Phone class="w-3.5 h-3.5 text-civic-blue" /> Assembly Support: 112</span>

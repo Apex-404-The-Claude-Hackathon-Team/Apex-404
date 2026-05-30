@@ -51,7 +51,7 @@ const getStatusLabel = (status: string) => {
 }
 
 // Fetch dashboard telemetry
-const { data: dashboardData } = await useAsyncData(`constituency-dashboard-${id}`, () => {
+const { data: dashboardData } = await useAsyncData<any>(`constituency-dashboard-${id}`, () => {
   return $api(`/api/dashboard/${id}`).catch((err: any) => {
     console.error('Error fetching constituency dashboard:', err)
     return null
@@ -59,15 +59,20 @@ const { data: dashboardData } = await useAsyncData(`constituency-dashboard-${id}
 })
 
 // Fetch MP Profile details
-const { data: mpProfileData } = await useAsyncData(`mp-profile-${id}`, () => {
+const { data: mpProfileData } = await useAsyncData<any>(`mp-profile-${id}`, () => {
   return $api(`/api/mp/${id}`).catch((err: any) => {
     console.error('Error fetching mp profile:', err)
     return null
   })
 })
 
+// Fetch all constituencies to resolve dynamic fallback names
+const { data: constituenciesData } = await useAsyncData<any>('all-constituencies', () => {
+  return $api('/api/location/constituencies').catch(() => null)
+})
+
 // Fetch reports list (all posts in this constituency)
-const { data: postsData, refresh: refreshReports } = await useAsyncData(`constituency-posts-${id}`, () => {
+const { data: postsData, refresh: refreshReports } = await useAsyncData<any>(`constituency-posts-${id}`, () => {
   return $api(`/api/posts`, {
     query: {
       constituency: id,
@@ -80,7 +85,7 @@ const { data: postsData, refresh: refreshReports } = await useAsyncData(`constit
 })
 
 // Fetch projects list
-const { data: projectsData } = await useAsyncData(`constituency-projects-${id}`, () => {
+const { data: projectsData } = await useAsyncData<any>(`constituency-projects-${id}`, () => {
   return $api(`/api/projects`, {
     query: {
       constituency: id,
@@ -96,18 +101,21 @@ const mpData = computed(() => {
   const profile = mpProfileData.value?.profile
   const stats = dashboardData.value?.reportStats
   
+  // Find constituency details in the list
+  const details = constituenciesData.value?.constituencies?.find((c: any) => c.id === id)
+  
   let defaultDetails = {
-    name: 'Hon. Osei Kyei-Mensah',
-    party: 'NPP',
-    constituency: 'Suame District Assembly',
-    region: 'Ashanti Region',
-    contact: 'osei.kyeimensah@parliament.gh | +233 24 342 9876',
+    name: details ? `Hon. ${details.mpName}` : 'Hon. Osei Kyei-Mensah',
+    party: details?.party || 'NPP',
+    constituency: details ? `${details.name} Assembly` : 'Suame District Assembly',
+    region: details ? `${details.region} Region` : 'Ashanti Region',
+    contact: details ? `mp.${details.id}@parliament.gh | +233 24 342 9876` : 'osei.kyeimensah@parliament.gh | +233 24 342 9876',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-    bio: 'Dedicated to local industrial growth, road safety, and community transparency.',
+    bio: details ? `Member of Parliament for ${details.name}. Working to build a responsive constituency and transparent public services.` : 'Dedicated to local industrial growth, road safety, and community transparency.',
     wardFilters: ['Atonsu', 'Dakodwom'],
-    responseRate: 84.5,
-    resolutionRate: 64,
-    ignoredCount: 3
+    responseRate: 100,
+    resolutionRate: 100,
+    ignoredCount: 0
   }
 
   if (id === 'mp_2') {
