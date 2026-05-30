@@ -1,0 +1,376 @@
+<script setup lang="ts">
+import { useRoute } from 'vue-router'
+import { ref, computed } from 'vue'
+import { MapPin, Phone, Mail, Clock, ThumbsUp, Building, ArrowRight, ShieldAlert, Cpu, Award, CheckCircle, Flame, Star, Activity, AlertTriangle, AlertOctagon, HelpCircle } from '@lucide/vue'
+import MapWidget from '~/components/ui/MapWidget.vue'
+
+const route = useRoute()
+const id = String(route.params.id) // e.g. "mp_1", "mp_2", "mp_3"
+
+// Load shared reports and projects
+const reports = useCookie<any[]>('citizen_reports')
+const projects = useCookie<any[]>('government_projects')
+
+const selectedFeedTab = ref<'top' | 'recent' | 'unresolved' | 'ignored'>('top')
+const selectedCategory = ref('all')
+
+const mpData = computed(() => {
+  if (id === 'mp_3') {
+    return {
+      id: 'mp_3',
+      name: 'Hon. Haruna Iddrisu',
+      party: 'NDC',
+      constituency: 'Tamale South',
+      region: 'Northern Region',
+      contact: 'haruna.iddrisu@parliament.gh | +233 24 412 3456',
+      responseRate: 92,
+      resolutionRate: 74,
+      ignoredCount: 2,
+      topIssues: ['Health Facilities', 'Youth Employment'],
+      recentAction: 'Commissioned 4 new localized boreholes',
+      wardFilters: ['Santasi'],
+      avatarInitials: 'HI',
+      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=256&h=256&q=80'
+    }
+  } else if (id === 'mp_2') {
+    return {
+      id: 'mp_2',
+      name: 'Hon. Samuel Okudzeto Ablakwa',
+      party: 'NDC',
+      constituency: 'North Tongu Assembly',
+      region: 'Volta Region',
+      contact: 'samuel.ablakwa@parliament.gh | +233 20 898 7654',
+      responseRate: 78,
+      resolutionRate: 52,
+      ignoredCount: 5,
+      topIssues: ['Sanitation', 'Education'],
+      recentAction: 'Acknowledged Water Shortage Reports (Pending Action)',
+      wardFilters: ['Nhyiaeso'],
+      avatarInitials: 'SA',
+      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&h=256&q=80'
+    }
+  } else {
+    // Default / "mp_1" (Osei Kyei-Mensah)
+    return {
+      id: 'mp_1',
+      name: 'Hon. Osei Kyei-Mensah',
+      party: 'NPP',
+      constituency: 'Suame District Assembly',
+      region: 'Ashanti Region',
+      contact: 'osei.kyeimensah@parliament.gh | +233 24 342 9876',
+      responseRate: 84.5,
+      resolutionRate: 64,
+      ignoredCount: 3,
+      topIssues: ['Road Infrastructure', 'Market Development'],
+      recentAction: 'Allocated 2.4B GHS for Central Drainage Overhaul (Verified)',
+      wardFilters: ['Atonsu', 'Dakodwom'],
+      avatarInitials: 'OK',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80'
+    }
+  }
+})
+
+// Upvoting inside dynamic feed
+const backIssue = (reportId: string) => {
+  if (reports.value) {
+    const idx = reports.value.findIndex(r => r._id === reportId)
+    if (idx !== -1) {
+      reports.value[idx].upvoteCount++
+      reports.value = [...reports.value]
+    }
+  }
+}
+
+const filteredReports = computed(() => {
+  if (!reports.value) return []
+  // Filter based on MP's ward filters
+  let list = reports.value.filter(r => mpData.value.wardFilters.includes(r.ward || ''))
+
+  if (selectedCategory.value !== 'all') {
+    list = list.filter(r => r.category === selectedCategory.value)
+  }
+
+  if (selectedFeedTab.value === 'top') {
+    list.sort((a, b) => b.upvoteCount - a.upvoteCount)
+  } else if (selectedFeedTab.value === 'recent') {
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  } else if (selectedFeedTab.value === 'unresolved') {
+    list = list.filter(r => r.status !== 'resolved')
+  } else if (selectedFeedTab.value === 'ignored') {
+    list = list.filter(r => r.status === 'ignored')
+  }
+
+  return list
+})
+
+const filteredProjects = computed(() => {
+  if (!projects.value) return []
+  return projects.value.filter(p => mpData.value.wardFilters.includes(p.ward || ''))
+})
+
+const categories = ['all', 'Infrastructure & Roads', 'Water & Utilities', 'Public Health & Sanitation', 'Education & Schools', 'Security & Zoning']
+
+const statusColors = (status: string) => {
+  switch (status) {
+    case 'In Progress': return 'text-blue-500 bg-blue-500/10 border-blue-500/30'
+    case 'Budgeted': return 'text-slate-500 bg-slate-500/10 border-slate-500/30'
+    case 'Completed': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30'
+    case 'Delayed': return 'text-amber-500 bg-amber-500/10 border-amber-500/30'
+    case 'Budget Heavy': return 'text-rose-500 bg-rose-500/10 border-rose-500/30 animate-pulse'
+    case 'Under Review': return 'text-purple-500 bg-purple-500/10 border-purple-500/30'
+    default: return 'text-slate-500 bg-slate-100 border-slate-200'
+  }
+}
+
+const statusIcons = (status: string) => {
+  switch (status) {
+    case 'In Progress': return Activity
+    case 'Budgeted': return Clock
+    case 'Completed': return CheckCircle
+    case 'Delayed': return AlertTriangle
+    case 'Budget Heavy': return AlertOctagon
+    case 'Under Review': return RefreshCw
+    default: return HardHat
+  }
+}
+
+const getProgressPercent = (status: string) => {
+  switch (status) {
+    case 'Completed': return 100
+    case 'In Progress': return 65
+    case 'Under Review': return 35
+    case 'Delayed': return 45
+    case 'Budget Heavy': return 80
+    case 'Budgeted': return 10
+    default: return 0
+  }
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+</script>
+
+<template>
+  <div class="w-full bg-[#f8fafc] min-h-screen pb-24">
+      
+      <!-- MP Profile Section with Unsplash background photo -->
+      <div class="relative pt-16 pb-28 px-6 border-b border-white/5 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1600&q=80')">
+          <!-- Dark overlay for text readability -->
+          <div class="absolute inset-0 bg-slate-950/75 z-0"></div>
+          <div class="absolute top-[20%] left-[10%] w-[380px] h-[380px] bg-civic-blue/10 rounded-full filter blur-[100px] pointer-events-none z-0"></div>
+          
+          <div class="container mx-auto px-6 lg:px-12 relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+              
+              <!-- Left side: Profile -->
+              <div class="flex items-center gap-6">
+                  <!-- Large MP profile portrait image -->
+                  <div class="relative shrink-0">
+                      <img :src="mpData.avatarUrl" :alt="mpData.name" class="w-20 h-20 md:w-24 md:h-24 rounded-full border-2 border-civic-gold object-cover shadow-2xl shadow-civic-gold/25" />
+                  </div>
+                  <div class="space-y-2">
+                      <div class="flex items-center gap-2">
+                          <span class="text-[9px] bg-civic-blue/10 text-civic-blue border border-civic-blue/25 font-black px-2 py-0.5 rounded uppercase tracking-widest">{{ mpData.party }}</span>
+                          <span class="text-slate-400 text-xs font-semibold">{{ mpData.region }}</span>
+                      </div>
+                      <h1 class="text-2xl md:text-4xl font-display font-black text-white uppercase tracking-tight leading-none">{{ mpData.name }}</h1>
+                      <p class="text-xs text-slate-400 font-bold flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-civic-blue"/> MP for {{ mpData.constituency }}</p>
+                  </div>
+              </div>
+
+              <!-- Right side: contact coordinates -->
+              <div class="bg-[#0f1524] border border-white/5 p-5 rounded max-w-sm w-full text-xs space-y-2.5 shadow-xl">
+                  <span class="block text-[8px] font-black uppercase text-slate-500 tracking-widest border-b border-white/5 pb-2">Constituency Contact Node</span>
+                  <p class="text-slate-300 font-semibold flex items-center gap-2 leading-none"><Mail class="w-4 h-4 text-civic-blue" /> {{ mpData.contact.split(' | ')[0] }}</p>
+                  <p class="text-slate-300 font-semibold flex items-center gap-2 leading-none"><Phone class="w-4 h-4 text-civic-blue" /> {{ mpData.contact.split(' | ')[1] }}</p>
+              </div>
+
+          </div>
+      </div>
+
+      <!-- Main Layout Section -->
+      <div class="container mx-auto px-6 lg:px-12 -mt-16 relative z-20 space-y-12">
+          
+          <!-- Public Accountability Scoreboard Row -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="bg-white border border-slate-200/80 rounded-lg p-6 flex items-center justify-between shadow-civic relative overflow-hidden">
+                  <div class="absolute top-0 left-0 right-0 h-[3px] bg-civic-blue"></div>
+                  <div>
+                      <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Office Response Rate</span>
+                      <h3 class="text-3xl font-display font-black text-civic-navy mt-1.5">{{ mpData.responseRate }}%</h3>
+                      <p class="text-[10px] text-slate-500 font-semibold mt-1">Acknowledgment frequency</p>
+                  </div>
+                  <div class="w-11 h-11 rounded-full bg-blue-50 border border-blue-150 flex items-center justify-center text-civic-blue">
+                      <Star class="w-5 h-5" />
+                  </div>
+              </div>
+
+              <div class="bg-white border border-slate-200/80 rounded-lg p-6 flex items-center justify-between shadow-civic relative overflow-hidden">
+                  <div class="absolute top-0 left-0 right-0 h-[3px] bg-emerald-500"></div>
+                  <div>
+                      <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Resolution Rate</span>
+                      <h3 class="text-3xl font-display font-black text-civic-navy mt-1.5">{{ mpData.resolutionRate }}%</h3>
+                      <p class="text-[10px] text-slate-500 font-semibold mt-1">Confirmed resolved reports</p>
+                  </div>
+                  <div class="w-11 h-11 rounded-full bg-emerald-50 border border-emerald-150 flex items-center justify-center text-emerald-500">
+                      <CheckCircle class="w-5 h-5" />
+                  </div>
+              </div>
+
+              <div class="bg-white border border-slate-200/80 rounded-lg p-6 flex items-center justify-between shadow-civic relative overflow-hidden">
+                  <div class="absolute top-0 left-0 right-0 h-[3px] bg-rose-500"></div>
+                  <div>
+                      <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ignored Issues count</span>
+                      <h3 class="text-3xl font-display font-black text-rose-600 mt-1.5">{{ mpData.ignoredCount }}</h3>
+                      <p class="text-[10px] text-slate-500 font-semibold mt-1">Unaddressed citizen files</p>
+                  </div>
+                  <div class="w-11 h-11 rounded-full bg-rose-50 border border-rose-150 flex items-center justify-center text-rose-500">
+                      <ShieldAlert class="w-5 h-5" />
+                  </div>
+              </div>
+          </div>
+
+          <!-- Bottom Grid: Feed & Projects (8 cols) vs Map (4 cols) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+              
+              <!-- Left side: Feed & Project logs (8 Cols) -->
+              <div class="lg:col-span-8 space-y-12">
+                  
+                  <!-- Localized Citizen Feed -->
+                  <div class="bg-white rounded-lg shadow-civic border border-slate-200 overflow-hidden">
+                      <div class="bg-civic-navy px-8 py-5 border-b border-white/5 flex flex-wrap justify-between items-center gap-4">
+                          <div>
+                              <h2 class="text-xs font-display font-black text-white uppercase tracking-wider">Constituency Complaints Feed</h2>
+                              <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Filtering wards: {{ mpData.wardFilters.join(', ') }}</p>
+                          </div>
+                          
+                          <!-- sorting selectors -->
+                          <div class="flex bg-civic-navy-dark rounded-full p-0.5 border border-white/5">
+                            <button 
+                              v-for="tab in ['top', 'recent', 'unresolved', 'ignored'] as const"
+                              :key="tab"
+                              @click="selectedFeedTab = tab" 
+                              :class="selectedFeedTab === tab ? 'bg-civic-blue text-white shadow-lg' : 'text-slate-400 hover:text-white'" 
+                              class="px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                            >
+                              {{ tab === 'top' ? 'Most Backed' : tab }}
+                            </button>
+                          </div>
+                      </div>
+
+                      <div class="px-8 py-3.5 bg-slate-50 border-b border-slate-200/60 overflow-x-auto flex gap-2 scrollbar-none">
+                        <button 
+                          v-for="cat in categories" 
+                          :key="cat"
+                          @click="selectedCategory = cat"
+                          :class="selectedCategory === cat ? 'bg-civic-navy text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-100 border-slate-200 hover:text-slate-700'"
+                          class="px-3.5 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-full border transition-all whitespace-nowrap cursor-pointer"
+                        >
+                          {{ cat === 'all' ? 'All Issues' : cat }}
+                        </button>
+                      </div>
+
+                      <!-- Feed List -->
+                      <div class="divide-y divide-slate-100">
+                          <div v-if="filteredReports.length === 0" class="p-16 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">
+                              No localized reports match.
+                          </div>
+                          <div v-for="report in filteredReports" :key="report._id" class="p-8 flex flex-col sm:flex-row gap-6 hover:bg-[#fcfdfe] transition-all">
+                              
+                              <div class="sm:w-24 shrink-0 flex flex-col items-center justify-center">
+                                  <span class="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Backing</span>
+                                  <span class="bg-slate-50 text-slate-700 font-black text-xl px-4 py-2 border border-slate-200/80 rounded w-full text-center">{{ report.upvoteCount }}</span>
+                                  <button @click="backIssue(report._id)" class="w-full mt-2 bg-white border border-civic-gold/50 text-civic-gold hover:bg-civic-gold hover:text-white rounded py-1.5 text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer">
+                                      Endorse
+                                  </button>
+                              </div>
+
+                              <div class="flex-1 flex flex-col justify-between">
+                                  <div>
+                                      <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                          <span class="text-[8px] px-2 py-0.5 font-black uppercase tracking-widest rounded border"
+                                                :class="{
+                                                    'bg-rose-50 border-rose-200 text-rose-600': report.status === 'open',
+                                                    'bg-amber-50 border-amber-200 text-amber-700': report.status === 'acknowledged',
+                                                    'bg-blue-50 border-blue-200 text-blue-700': report.status === 'budgeted' || report.status === 'in_progress',
+                                                    'bg-slate-50 border-slate-200 text-slate-600': report.status === 'ignored',
+                                                    'bg-emerald-50 border-emerald-200 text-emerald-700': report.status === 'resolved'
+                                                }">{{ report.status.replace('_', ' ') }}</span>
+                                          <span class="text-[8px] font-black uppercase tracking-widest text-civic-navy bg-slate-100 px-2 py-0.5 border border-slate-200 rounded">{{ report.category }}</span>
+                                      </div>
+                                      <NuxtLink :to="`/reports/${report._id}`" class="text-lg font-bold font-display text-civic-navy hover:text-civic-blue transition-colors line-clamp-1">{{ report.title }}</NuxtLink>
+                                      <p class="text-xs text-slate-500 font-semibold line-clamp-2 mt-1">{{ report.body }}</p>
+                                  </div>
+                                  <div class="flex justify-between items-center border-t border-slate-100 pt-3 mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                      <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-slate-300"/> {{ report.location }}</span>
+                                      <NuxtLink :to="`/reports/${report._id}`" class="text-civic-blue font-black uppercase tracking-widest flex items-center gap-1">Details <ArrowRight class="w-3 h-3"/></NuxtLink>
+                                  </div>
+                              </div>
+
+                          </div>
+                      </div>
+                  </div>
+
+                  <!-- Localized Projects Grid -->
+                  <div class="bg-white rounded-lg shadow-civic border border-slate-200 p-8 space-y-6">
+                      <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                          <h2 class="text-xs font-display font-black text-civic-navy uppercase tracking-wider flex items-center gap-2">
+                              <HardHat class="w-4.5 h-4.5 text-civic-gold" /> Active Local Projects
+                          </h2>
+                          <NuxtLink to="/projects" class="text-[9px] font-black text-civic-blue uppercase tracking-widest hover:text-civic-navy transition-colors">See all projects</NuxtLink>
+                      </div>
+
+                      <div class="divide-y divide-slate-100 space-y-6">
+                          <div v-if="filteredProjects.length === 0" class="text-center text-slate-400 font-bold uppercase tracking-widest text-xs py-4">No active initiatives found.</div>
+                          <div v-for="proj in filteredProjects" :key="proj.id" class="pt-6 first:pt-0 space-y-3">
+                              <div class="flex items-center justify-between gap-4">
+                                  <div class="flex items-center gap-2.5">
+                                      <span :class="statusColors(proj.status)" class="flex items-center gap-1 px-2.5 py-1 text-[8px] font-black uppercase tracking-widest border rounded">
+                                          <component :is="statusIcons(proj.status)" class="w-3 h-3" /> {{ proj.status }}
+                                      </span>
+                                      <h4 class="font-bold text-sm text-civic-navy uppercase tracking-tight">{{ proj.title }}</h4>
+                                  </div>
+                                  <span class="text-xs font-black text-slate-400 uppercase tracking-widest">{{ proj.budget }}</span>
+                              </div>
+                              <p class="text-xs text-slate-500 font-medium leading-relaxed">{{ proj.description }}</p>
+                              
+                              <div class="w-full space-y-1">
+                                  <div class="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                      <span>Completion Trace</span>
+                                      <span>{{ getProgressPercent(proj.status) }}%</span>
+                                  </div>
+                                  <div class="h-1 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                                      <div class="h-full bg-gradient-to-r from-slate-300 to-civic-blue" :style="`width: ${getProgressPercent(proj.status)}%`"></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
+              </div>
+
+              <!-- Right side: constituency Radar map & notices (4 Cols) -->
+              <div class="lg:col-span-4 space-y-6">
+                  
+                  <!-- Constituency Radar Map -->
+                  <MapWidget :reports="filteredReports" />
+                  
+                  <!-- Latest action panel -->
+                  <div class="bg-civic-navy-dark text-white rounded-lg p-6 shadow-2xl grid-bg border border-white/5 space-y-4">
+                      <div class="border-b border-white/5 pb-2.5">
+                          <h3 class="text-xs font-black uppercase tracking-widest text-civic-gold">Latest Official Intervention</h3>
+                      </div>
+                      <p class="text-xs text-slate-300 font-semibold leading-relaxed">
+                          {{ mpData.recentAction }}
+                      </p>
+                      <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Audit Period: Q4 2026</span>
+                  </div>
+
+              </div>
+
+          </div>
+
+      </div>
+
+  </div>
+</template>

@@ -10,10 +10,20 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@lucide/vue": "^1.17.0",
+    "@pinia/nuxt": "^0.11.3",
     "@tailwindcss/vite": "^4.3.0",
+    "@vueuse/nuxt": "^14.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "nuxt": "^4.4.6",
+    "pinia": "^3.0.4",
+    "postcss": "^8.5.15",
+    "radix-vue": "^1.9.17",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "vue": "^3.5.34",
-    "vue-router": "^5.0.7"
+    "vue-router": "^5.0.7",
+    "zod": "^4.4.3"
   }
 }
