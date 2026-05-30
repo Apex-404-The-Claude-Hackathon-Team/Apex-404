@@ -92,43 +92,41 @@ const currentConstituency = computed(() => {
 
         <!-- Top Utility Bar -->
         <div class="bg-[#080c14] text-slate-400 text-xs py-2 border-b border-white/5 relative z-40">
-            <div class="container mx-auto px-6 lg:px-12 flex justify-between items-center">
-                <div class="flex items-center gap-6">
-                    <div class="flex items-center gap-2 text-slate-400">
-                        <MapPin class="w-3.5 h-3.5 text-civic-blue" />
-                        <span class="font-bold">Constituency Node:</span>
-                        <select :value="currentConstituency" @change="navigateToConstituency($event)" class="bg-transparent text-white font-bold outline-none border-none cursor-pointer text-xs focus:ring-0 max-w-[200px] overflow-hidden truncate">
-                            <option value="" disabled class="bg-[#080c14] text-slate-400">Select...</option>
-                            <option v-for="item in constituenciesList" :key="item.id" :value="item.id" class="bg-[#080c14] text-white">
-                                {{ getShortLabel(item) }}
-                            </option>
-                        </select>
-                    </div>
-                    <span class="hidden md:flex items-center gap-2 hover:text-white transition-colors cursor-pointer"><Phone class="w-3.5 h-3.5 text-civic-blue" /> Assembly Support: 112</span>
+            <div class="container mx-auto px-4 lg:px-12 flex justify-between items-center gap-2 min-w-0">
+                <div class="flex items-center gap-2 min-w-0 overflow-hidden">
+                    <MapPin class="w-3.5 h-3.5 text-civic-blue shrink-0" />
+                    <span class="hidden sm:inline font-bold whitespace-nowrap shrink-0">Constituency Node:</span>
+                    <select :value="currentConstituency" @change="navigateToConstituency($event)" class="bg-transparent text-white font-bold outline-none border-none cursor-pointer text-xs focus:ring-0 min-w-0 max-w-[160px] sm:max-w-[220px] truncate">
+                        <option value="" disabled class="bg-[#080c14] text-slate-400">Select...</option>
+                        <option v-for="item in constituenciesList" :key="item.id" :value="item.id" class="bg-[#080c14] text-white">
+                            {{ getShortLabel(item) }}
+                        </option>
+                    </select>
+                    <span class="hidden md:flex items-center gap-2 hover:text-white transition-colors cursor-pointer shrink-0"><Phone class="w-3.5 h-3.5 text-civic-blue" /> Assembly Support: 112</span>
                 </div>
-                <div class="flex items-center gap-4">
-                    <button class="flex items-center gap-1 hover:text-white transition-colors">English <ChevronDown class="w-3 h-3 text-civic-blue" /></button>
+                <div class="hidden sm:flex items-center gap-3 shrink-0">
+                    <button class="flex items-center gap-1 hover:text-white transition-colors whitespace-nowrap">English <ChevronDown class="w-3 h-3 text-civic-blue" /></button>
                     <div class="h-3 w-px bg-white/10"></div>
-                    <button class="flex items-center gap-1 hover:text-white transition-colors">Local Translation <ChevronDown class="w-3 h-3 text-civic-gold" /></button>
+                    <button class="flex items-center gap-1 hover:text-white transition-colors whitespace-nowrap">Local Translation <ChevronDown class="w-3 h-3 text-civic-gold" /></button>
                 </div>
             </div>
         </div>
 
         <!-- Main Header with Sticky Glassmorphism -->
         <header class="sticky top-[3px] z-50 bg-[#0c1220]/90 backdrop-blur-md border-b border-white/5 shadow-lg shadow-black/20 text-white transition-all">
-            <div class="container mx-auto px-6 lg:px-12 flex items-center justify-between h-[85px]">
-                
+            <div class="container mx-auto px-4 lg:px-12 flex items-center justify-between h-[64px] sm:h-[85px]">
+
                 <!-- Logo Area -->
                 <div class="flex items-center gap-4">
-                    <NuxtLink to="/" class="flex items-center gap-3.5 group">
-                       <div class="w-12 h-12 bg-white/5 rounded border border-white/10 flex items-center justify-center p-2 group-hover:border-civic-blue/50 group-hover:shadow-[0_0_15px_rgba(43,108,176,0.3)] transition-all">
-                           <Cpu class="w-6 h-6 text-civic-blue group-hover:scale-110 transition-transform" />
+                    <NuxtLink to="/" class="flex items-center gap-2.5 sm:gap-3.5 group">
+                       <div class="w-9 h-9 sm:w-12 sm:h-12 bg-white/5 rounded border border-white/10 flex items-center justify-center p-1.5 sm:p-2 group-hover:border-civic-blue/50 group-hover:shadow-[0_0_15px_rgba(43,108,176,0.3)] transition-all">
+                           <Cpu class="w-5 h-5 sm:w-6 sm:h-6 text-civic-blue group-hover:scale-110 transition-transform" />
                        </div>
                        <div>
-                           <h1 class="text-2xl font-display font-black tracking-tight text-white leading-none flex items-center gap-1">
+                           <h1 class="text-xl sm:text-2xl font-display font-black tracking-tight text-white leading-none flex items-center gap-1">
                                Voice<span class="text-civic-gold">Up</span>
                            </h1>
-                           <p class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-1">Governance Platform</p>
+                           <p class="hidden sm:block text-[9px] font-bold text-slate-400 uppercase tracking-[0.25em] mt-1">Governance Platform</p>
                        </div>
                     </NuxtLink>
                 </div>
@@ -179,27 +177,31 @@ const currentConstituency = computed(() => {
                 </div>
                 
                 <!-- Mobile Toggle -->
-                <button @click="mobileMenuOpen = !mobileMenuOpen" class="lg:hidden text-white p-2 focus:outline-none">
-                    <Menu v-if="!mobileMenuOpen" class="w-7 h-7" />
-                    <X v-else class="w-7 h-7" />
+                <button @click="mobileMenuOpen = !mobileMenuOpen" class="lg:hidden text-white p-2 -mr-1 focus:outline-none touch-manipulation">
+                    <Menu v-if="!mobileMenuOpen" class="w-6 h-6 sm:w-7 sm:h-7" />
+                    <X v-else class="w-6 h-6 sm:w-7 sm:h-7" />
                 </button>
             </div>
             
             <!-- Mobile Menu Dropdown -->
             <div v-if="mobileMenuOpen" class="lg:hidden absolute top-[100%] left-0 w-full bg-[#0c1220] border-b border-white/10 shadow-2xl flex flex-col z-50">
-                <NuxtLink @click="mobileMenuOpen = false" to="/" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isDashboardActive ? 'text-civic-blue bg-white/5' : 'text-white hover:text-slate-200'">Home</NuxtLink>
-                <NuxtLink @click="mobileMenuOpen = false" to="/report" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isReportActive ? 'text-civic-gold bg-white/5' : 'text-white hover:text-slate-200'">Submit Issue</NuxtLink>
-                <NuxtLink @click="mobileMenuOpen = false" to="/scorecards" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isScorecardsActive ? 'text-civic-blue bg-white/5' : 'text-white hover:text-slate-200'">MP Scorecards</NuxtLink>
-                <NuxtLink @click="mobileMenuOpen = false" to="/projects" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isProjectsActive ? 'text-civic-gold bg-white/5' : 'text-white hover:text-slate-200'">Project Tracker</NuxtLink>
-                <NuxtLink v-if="auth.role === 'mp' || auth.role === 'admin'" @click="mobileMenuOpen = false" to="/mp" class="p-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isMpActive ? 'text-civic-gold bg-white/5' : 'text-civic-gold hover:text-amber-200'">Official Console</NuxtLink>
-                
-                <div class="p-4 bg-[#080c14]">
+                <NuxtLink @click="mobileMenuOpen = false" to="/" class="px-5 py-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isDashboardActive ? 'text-civic-blue bg-white/5' : 'text-white'">Home</NuxtLink>
+                <NuxtLink @click="mobileMenuOpen = false" to="/report" class="px-5 py-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isReportActive ? 'text-civic-gold bg-white/5' : 'text-white'">Submit Issue</NuxtLink>
+                <NuxtLink @click="mobileMenuOpen = false" to="/scorecards" class="px-5 py-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isScorecardsActive ? 'text-civic-blue bg-white/5' : 'text-white'">MP Scorecards</NuxtLink>
+                <NuxtLink @click="mobileMenuOpen = false" to="/projects" class="px-5 py-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs" :class="isProjectsActive ? 'text-civic-gold bg-white/5' : 'text-white'">Project Tracker</NuxtLink>
+                <NuxtLink v-if="auth.role === 'mp' || auth.role === 'admin'" @click="mobileMenuOpen = false" to="/mp" class="px-5 py-4 border-b border-white/5 font-bold uppercase tracking-wider text-xs text-civic-gold" :class="isMpActive ? 'bg-white/5' : ''">Official Console</NuxtLink>
+
+                <div class="px-5 py-4 bg-[#080c14] space-y-3">
                     <template v-if="auth.isAuthenticated">
-                       <button @click="handleLogout(); mobileMenuOpen = false" class="w-full text-center bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded text-xs uppercase tracking-wider">Logout</button>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Signed in as</span>
+                            <span class="text-xs text-white font-black uppercase tracking-wider">{{ auth.user?.name || 'Citizen' }}</span>
+                        </div>
+                        <button @click="handleLogout(); mobileMenuOpen = false" class="w-full text-center bg-rose-600/80 hover:bg-rose-600 text-white font-bold py-3.5 rounded text-xs uppercase tracking-wider">Logout</button>
                     </template>
                     <template v-else>
-                        <NuxtLink @click="mobileMenuOpen = false" to="/login" class="block w-full text-center border border-white/10 text-white font-bold py-3 rounded text-xs uppercase tracking-wider mb-2">Log In</NuxtLink>
-                        <NuxtLink @click="mobileMenuOpen = false" to="/register" class="block w-full text-center bg-civic-blue text-white font-bold py-3 rounded text-xs uppercase tracking-wider">Register</NuxtLink>
+                        <NuxtLink @click="mobileMenuOpen = false" to="/login" class="block w-full text-center border border-white/10 text-white font-bold py-3.5 rounded text-xs uppercase tracking-wider">Log In</NuxtLink>
+                        <NuxtLink @click="mobileMenuOpen = false" to="/register" class="block w-full text-center bg-civic-blue text-white font-bold py-3.5 rounded text-xs uppercase tracking-wider">Register</NuxtLink>
                     </template>
                 </div>
             </div>
